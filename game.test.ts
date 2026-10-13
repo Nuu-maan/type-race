@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
 import {
+  FINISH_GRACE_MS,
+  raceOver,
+  results,
+  standings,
   applyBackspace,
   applyKey,
   createRace,
@@ -152,4 +156,39 @@ test("speed is capped against key floods", () => {
   const { race, p } = solo();
   drive(race, p, 500, 3, 0);
   expect(p.speed).toBeLessThanOrEqual(200 * (TRACK / 3600) * 1.25 + 0.01);
+});
+
+test("five racers finish in order and the race waits for stragglers", () => {
+  const ids = ["a", "b", "c", "d", "e"];
+  const race = createRace(3, ids.map((id) => ({ id, name: id })), 0);
+  const charsPerSec = [3, 4, 5, 6, 8];
+  const carry = [0, 0, 0, 0, 0];
+  let now = 0;
+  while (race.finishers < 2) {
+    now += DT * 1000;
+    race.players.forEach((p, i) => {
+      carry[i]! += charsPerSec[i]! * DT;
+      for (; carry[i]! >= 1; carry[i]!--) applyKey(race.text, p, race.text[p.typed]!, now);
+    });
+    tick(race, DT, now);
+  }
+  expect(race.winner).toBe("e");
+  expect(standings(race).map((p) => p.id).slice(0, 2)).toEqual(["e", "d"]);
+  expect(raceOver(race, now)).toBe(false);
+  expect(raceOver(race, race.firstFinishAt! + FINISH_GRACE_MS)).toBe(true);
+  const rows = results(race, now);
+  expect(rows.map((r) => r.place)).toEqual([1, 2, 3, 4, 5]);
+  expect(rows[0]!.finished).toBe(true);
+  expect(rows[4]!.finished).toBe(false);
+});
+
+test("racers who leave drop to the bottom and stop counting", () => {
+  const race = createRace(3, [{ id: "a", name: "a" }, { id: "b", name: "b" }, { id: "c", name: "c" }], 0);
+  race.players[0]!.pos = 500;
+  race.players[0]!.left = true;
+  race.players[1]!.pos = 100;
+  expect(standings(race).map((p) => p.id)).toEqual(["b", "c", "a"]);
+  race.players[1]!.finishedAt = 10;
+  race.players[2]!.finishedAt = 20;
+  expect(raceOver(race, 30)).toBe(true);
 });
