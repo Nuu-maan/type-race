@@ -9,6 +9,15 @@ A two-player typing race. Both players get the same words and type them on their
 
 The race starts once both players are in the room and the host presses Start.
 
+## Progression
+
+- **Difficulty**: the host picks Easy (short common words), Normal (the 200 most common words) or Hard (long words, capitals and punctuation). Mistakes cost more on harder races.
+- **XP and levels**: every finished race earns XP from your WPM and accuracy, more on harder races, plus a bonus for winning.
+- **Garage**: pick a paint and a body (GT, Muscle, Hyper) in the room. New ones unlock as you level.
+- **Leaderboard**: best WPM per difficulty, on the landing page.
+
+Profiles live in `data/type-race.sqlite` on the machine running the server, keyed by an id each browser keeps locally. Set `DB_PATH` to use another file.
+
 ## Run
 
 ```sh
