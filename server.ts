@@ -1,18 +1,32 @@
 import type { ServerWebSocket } from "bun";
 import index from "./index.html";
+import { ensurePlayer, getProfile, leaderboard, recordRace, setCar } from "./db";
 import { applyBackspace, applyKey, createRace, results, tick, wpm, type Race } from "./game";
+import {
+  canUse,
+  DEFAULT_CARS,
+  isDifficulty,
+  levelFromXp,
+  raceXp,
+  unlockedBetween,
+  type Car,
+  type Difficulty,
+} from "./progress";
 
 const COUNTDOWN_MS = 3000;
 const TICK_MS = 50;
+const PLAYER_ID = /^[0-9a-f-]{36}$/;
 
 type Status = "lobby" | "countdown" | "racing" | "finished";
-type Socket = ServerWebSocket<{ id: string; name: string; code: string }>;
+type SocketData = { id: string; pid: string | null; name: string; code: string; xp: number; car: Car };
+type Socket = ServerWebSocket<SocketData>;
 
 type Room = {
   code: string;
   host: string;
   members: Socket[];
   status: Status;
+  difficulty: Difficulty;
   race: Race | null;
   timer: Timer | null;
 };
@@ -40,7 +54,14 @@ function roomInfo(room: Room) {
     code: room.code,
     host: room.host,
     status: room.status,
-    players: room.members.map((m) => ({ id: m.data.id, name: m.data.name })),
+    difficulty: room.difficulty,
+    players: room.members.map((m) => ({
+      id: m.data.id,
+      name: m.data.name,
+      xp: m.data.xp,
+      level: levelFromXp(m.data.xp),
+      car: m.data.car,
+    })),
   };
 }
 
@@ -49,14 +70,34 @@ function stopTimer(room: Room) {
   room.timer = null;
 }
 
+function award(room: Room, winner: string | null, rows: ReturnType<typeof results>) {
+  const progress: Record<string, { gained: number; xp: number; level: number; leveledUp: boolean; unlocked: string[] }> = {};
+  for (const row of rows) {
+    const member = room.members.find((m) => m.data.id === row.id);
+    if (!member) continue;
+    const won = row.id === winner;
+    const gained = raceXp(row.wpm, row.accuracy, room.difficulty, won);
+    const before = levelFromXp(member.data.xp);
+    member.data.xp += gained;
+    const after = levelFromXp(member.data.xp);
+    if (member.data.pid) {
+      recordRace({ player: member.data.pid, difficulty: room.difficulty, wpm: row.wpm, accuracy: row.accuracy, won, xp: gained });
+    }
+    progress[row.id] = { gained, xp: member.data.xp, level: after, leveledUp: after > before, unlocked: unlockedBetween(before, after) };
+  }
+  return progress;
+}
+
 function finish(room: Room, winner: string | null, forfeit = false) {
   stopTimer(room);
   room.status = "finished";
+  const rows = room.race ? results(room.race, Date.now()) : [];
   broadcast(room, {
     t: "finish",
     winner,
     forfeit,
-    results: room.race ? results(room.race, Date.now()) : [],
+    results: rows,
+    progress: forfeit ? {} : award(room, winner, rows),
   });
 }
 
@@ -67,9 +108,10 @@ function startRace(room: Room) {
     Math.floor(Math.random() * 2 ** 31),
     room.members.map((m) => m.data),
     now + COUNTDOWN_MS,
+    room.difficulty,
   );
   room.status = "countdown";
-  broadcast(room, { t: "countdown", ms: COUNTDOWN_MS, text: room.race.text });
+  broadcast(room, { t: "countdown", ms: COUNTDOWN_MS, text: room.race.text, difficulty: room.difficulty });
 
   let last = now;
   room.timer = setInterval(() => {
@@ -113,28 +155,71 @@ function leave(ws: Socket) {
   broadcast(room, roomInfo(room));
 }
 
+function changeCar(ws: Socket, room: Room, msg: { paint?: unknown; body?: unknown }) {
+  if (room.status !== "lobby" && room.status !== "finished") return;
+  const car = { paint: String(msg.paint), body: String(msg.body) } as Car;
+  const allowed = ws.data.pid ? setCar(ws.data.pid, car) : canUse(car, levelFromXp(ws.data.xp));
+  if (!allowed) return;
+  ws.data.car = car;
+  broadcast(room, roomInfo(room));
+}
+
 export const server = Bun.serve({
   port: Number(process.env.PORT ?? 3000),
   development: process.env.NODE_ENV !== "production",
-  routes: { "/": index },
+  routes: {
+    "/": index,
+    "/api/leaderboard": (req) => {
+      const d = new URL(req.url).searchParams.get("d");
+      return Response.json(leaderboard(isDifficulty(d) ? d : "normal"));
+    },
+    "/api/profile": (req) => {
+      const id = new URL(req.url).searchParams.get("id") ?? "";
+      return Response.json(PLAYER_ID.test(id) ? getProfile(id) : null);
+    },
+  },
   fetch(req, server) {
     const url = new URL(req.url);
     if (url.pathname !== "/ws") return new Response("Not found", { status: 404 });
     const name = (url.searchParams.get("name") ?? "").trim().slice(0, 16) || "Player";
     const code = (url.searchParams.get("room") ?? "").toUpperCase();
-    const ok = server.upgrade(req, { data: { id: crypto.randomUUID(), name, code } });
-    return ok ? undefined : new Response("Expected a WebSocket", { status: 400 });
+    const pid = url.searchParams.get("pid") ?? "";
+    const data: SocketData = {
+      id: crypto.randomUUID(),
+      pid: PLAYER_ID.test(pid) ? pid : null,
+      name,
+      code,
+      xp: 0,
+      car: DEFAULT_CARS[0]!,
+    };
+    return server.upgrade(req, { data }) ? undefined : new Response("Expected a WebSocket", { status: 400 });
   },
   websocket: {
     open(ws: Socket) {
       let room = rooms.get(ws.data.code);
       if (ws.data.code === "NEW") {
         ws.data.code = newCode();
-        room = { code: ws.data.code, host: ws.data.id, members: [], status: "lobby", race: null, timer: null };
+        room = {
+          code: ws.data.code,
+          host: ws.data.id,
+          members: [],
+          status: "lobby",
+          difficulty: "normal",
+          race: null,
+          timer: null,
+        };
         rooms.set(room.code, room);
       }
       if (!room) return ws.close(4004, "Room not found");
       if (room.members.length >= 2) return ws.close(4003, "Room is full");
+      const fallback = DEFAULT_CARS[room.members.length]!;
+      if (ws.data.pid) {
+        const profile = ensurePlayer(ws.data.pid, ws.data.name, fallback.paint);
+        ws.data.xp = profile.xp;
+        ws.data.car = profile.car;
+      } else {
+        ws.data.car = fallback;
+      }
       room.members.push(ws);
       ws.subscribe(room.code);
       send(ws, { t: "hello", you: ws.data.id });
@@ -143,13 +228,17 @@ export const server = Bun.serve({
     message(ws: Socket, raw) {
       const room = rooms.get(ws.data.code);
       if (!room) return;
-      let msg: { t?: string; c?: unknown; w?: unknown };
+      let msg: { t?: string; c?: unknown; w?: unknown; d?: unknown; paint?: unknown; body?: unknown };
       try {
         msg = JSON.parse(String(raw));
       } catch {
         return;
       }
       if (msg.t === "start" && room.host === ws.data.id) startRace(room);
+      else if (msg.t === "difficulty" && room.host === ws.data.id && room.status === "lobby" && isDifficulty(msg.d)) {
+        room.difficulty = msg.d;
+        broadcast(room, roomInfo(room));
+      } else if (msg.t === "car") changeCar(ws, room, msg);
       else if (msg.t === "rematch" && room.status === "finished") {
         room.status = "lobby";
         room.race = null;
