@@ -1,8 +1,8 @@
-import { TRACK } from "./game";
+import { applyBackspace, applyKey, createPlayer, TRACK, type Player } from "./game";
 
 type Info = { id: string; name: string };
 type Status = "lobby" | "countdown" | "racing" | "finished";
-type CarState = { id: string; pos: number; speed: number; wpm: number; skid: boolean; nitro: boolean };
+type CarState = { id: string; pos: number; speed: number; wpm: number; slip: boolean; nitro: boolean };
 type Result = { id: string; name: string; wpm: number; accuracy: number; time: number };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -25,7 +25,7 @@ let status: Status = "lobby";
 let players: Info[] = [];
 let shownSlots = new Set<string>();
 let text = "";
-let typed = 0;
+let self: Player = createPlayer("", "", 0);
 let letters: HTMLSpanElement[] = [];
 let cars = new Map<string, CarState & { shown: number; at: number }>();
 let roadOffset = 0;
@@ -154,7 +154,7 @@ function renderWords() {
 }
 
 function placeCaret() {
-  const l = letters[typed];
+  const l = letters[self.typed];
   if (!l) return;
   const word = l.parentElement!;
   const lineHeight = word.offsetHeight;
@@ -167,8 +167,8 @@ function placeCaret() {
 function onCountdown(newText: string, ms: number) {
   status = "countdown";
   text = newText;
-  typed = 0;
-  cars = new Map(players.map((p) => [p.id, { id: p.id, pos: 0, speed: 0, wpm: 0, skid: false, nitro: false, shown: 0, at: 0 }]));
+  self = createPlayer(me, nameOf(me), text.length);
+  cars = new Map(players.map((p) => [p.id, { id: p.id, pos: 0, speed: 0, wpm: 0, slip: false, nitro: false, shown: 0, at: 0 }]));
   roadOffset = 0;
   $("finish").hidden = true;
   show("race");
@@ -237,26 +237,54 @@ function onFinish(winner: string | null, forfeit: boolean, results: Result[]) {
   $("finish").hidden = false;
 }
 
-function type(ch: string) {
-  if (status !== "racing" || typed >= text.length) return;
-  send({ t: "key", c: ch });
-  const l = letters[typed]!;
-  if (text[typed] === ch) {
-    l.classList.remove("wrong");
-    l.classList.add("done");
-    typed++;
-    wordsEl.classList.remove("idle");
-    placeCaret();
-  } else {
-    l.classList.remove("wrong");
-    void l.offsetWidth;
-    l.classList.add("wrong");
+const MARK_CLASS = ["", "done", "wrong", "missed"];
+
+function paint(from: number, to: number) {
+  for (let i = Math.max(0, from); i <= Math.min(to, letters.length - 1); i++) {
+    letters[i]!.className = MARK_CLASS[self.marks[i]!]!;
   }
+  wordsEl.classList.remove("idle");
+  placeCaret();
 }
+
+function flashCaret() {
+  caret.classList.remove("over");
+  void caret.offsetWidth;
+  caret.classList.add("over");
+}
+
+function type(ch: string) {
+  if (status !== "racing") return;
+  const before = self.typed;
+  applyKey(text, self, ch, Date.now());
+  send({ t: "key", c: ch });
+  if (self.typed === before) {
+    if (ch !== " ") flashCaret();
+    return;
+  }
+  paint(before, self.typed);
+}
+
+function backspace(wholeWord: boolean) {
+  if (status !== "racing") return;
+  const before = self.typed;
+  applyBackspace(self, wholeWord);
+  send({ t: "back", w: wholeWord });
+  paint(self.typed, before);
+}
+
+ghost.value = "   ";
+
+ghost.addEventListener("keydown", (e) => {
+  if (e.key !== "Backspace") return;
+  e.preventDefault();
+  backspace(e.ctrlKey || e.altKey || e.metaKey);
+});
 
 ghost.addEventListener("beforeinput", (e) => {
   e.preventDefault();
-  for (const ch of e.data ?? "") type(ch);
+  if (e.inputType.startsWith("delete")) backspace(e.inputType.includes("Word"));
+  else for (const ch of e.data ?? "") type(ch);
 });
 
 wordsEl.addEventListener("pointerdown", (e) => {
@@ -354,10 +382,10 @@ function draw(dt: number) {
 }
 
 function drawCar(x: number, y: number, color: string, car: CarState, isMe: boolean, name: string) {
-  const shake = car.skid ? (Math.random() - 0.5) * 3 : 0;
+  const shake = car.slip ? (Math.random() - 0.5) * 3 : 0;
   ctx.save();
   ctx.translate(x, y + shake);
-  if (car.skid) ctx.rotate((Math.random() - 0.5) * 0.08);
+  if (car.slip) ctx.rotate((Math.random() - 0.5) * 0.08);
 
   if (car.nitro) {
     const flame = 14 + Math.random() * 8;

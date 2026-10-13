@@ -393,16 +393,13 @@ canvas {
 
 .wrong {
   color: var(--wrong);
-  animation: shake 0.3s;
 }
 
-@keyframes shake {
-  25% {
-    transform: translateX(-2px);
-  }
-  75% {
-    transform: translateX(2px);
-  }
+.missed {
+  color: var(--wrong);
+  opacity: 0.45;
+  text-decoration: underline 2px;
+  text-underline-offset: 4px;
 }
 
 .caret {
@@ -414,6 +411,17 @@ canvas {
   border-radius: 1px;
   background: var(--strong);
   transition: transform 0.08s linear;
+}
+
+.caret.over {
+  animation: over 0.3s;
+}
+
+@keyframes over {
+  30% {
+    background: var(--wrong);
+    translate: 3px 0;
+  }
 }
 
 .words.idle .caret {
