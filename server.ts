@@ -1,6 +1,6 @@
 import type { ServerWebSocket } from "bun";
 import index from "./index.html";
-import { applyKey, createRace, results, tick, wpm, type Race } from "./game";
+import { applyBackspace, applyKey, createRace, results, tick, wpm, type Race } from "./game";
 
 const COUNTDOWN_MS = 3000;
 const TICK_MS = 50;
@@ -90,7 +90,7 @@ function startRace(room: Room) {
         pos: p.pos,
         speed: p.speed,
         wpm: Math.round(wpm(race, p, t)),
-        skid: t < p.skidUntil,
+        slip: t < p.slipUntil,
         nitro: t < p.nitroUntil,
       })),
     });
@@ -143,7 +143,7 @@ export const server = Bun.serve({
     message(ws: Socket, raw) {
       const room = rooms.get(ws.data.code);
       if (!room) return;
-      let msg: { t?: string; c?: unknown };
+      let msg: { t?: string; c?: unknown; w?: unknown };
       try {
         msg = JSON.parse(String(raw));
       } catch {
@@ -156,7 +156,10 @@ export const server = Bun.serve({
         broadcast(room, roomInfo(room));
       } else if (msg.t === "key" && room.status === "racing" && typeof msg.c === "string" && msg.c.length === 1) {
         const player = room.race!.players.find((p) => p.id === ws.data.id);
-        if (player) applyKey(room.race!, player, msg.c, Date.now());
+        if (player) applyKey(room.race!.text, player, msg.c, Date.now());
+      } else if (msg.t === "back" && room.status === "racing") {
+        const player = room.race!.players.find((p) => p.id === ws.data.id);
+        if (player) applyBackspace(player, msg.w === true);
       }
     },
     close(ws: Socket) {

@@ -1,9 +1,9 @@
 # type-race
 
-A two-player typing race. Both players get the same words and type them on their own screens. Typing speed drives your car.
+A two-player typing race. Both players get the same words and type them on their own screens. Typing speed drives your car through a WebGL night race.
 
 - **Speed** comes from your rolling WPM over the last 3 seconds. The car speeds up and slows down with momentum, and coasts to a stop when you stop typing.
-- **Mistakes** don't move the caret, and each one makes your car skid for a moment.
+- **Mistakes** don't stop you. Wrong letters show in red and the caret moves on, like monkeytype, and Backspace (or Ctrl+Backspace for the word) fixes them. Each mistake makes the car accelerate more slowly for a moment, and only correct letters count toward speed.
 - **Accuracy** below 100% lowers your top speed, so mashing keys loses to clean typing.
 - **Nitro**: eight clean words in a row give a short boost.
 

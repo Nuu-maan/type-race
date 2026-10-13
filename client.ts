@@ -1,8 +1,9 @@
-import { TRACK } from "./game";
+import { applyBackspace, applyKey, createPlayer, TRACK, type Player } from "./game";
+import { createScene, METERS_PER_UNIT, type SceneCar } from "./scene";
 
 type Info = { id: string; name: string };
 type Status = "lobby" | "countdown" | "racing" | "finished";
-type CarState = { id: string; pos: number; speed: number; wpm: number; skid: boolean; nitro: boolean };
+type CarState = { id: string; pos: number; speed: number; wpm: number; slip: boolean; nitro: boolean };
 type Result = { id: string; name: string; wpm: number; accuracy: number; time: number };
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -13,9 +14,8 @@ const wordsEl = $("words");
 const wordsInner = $("words-inner");
 const caret = $("caret");
 const canvas = $<HTMLCanvasElement>("track");
-const ctx = canvas.getContext("2d")!;
 const countdownEl = $("countdown");
-const CAR_COLORS = ["#5b7fa6", "#c0736f"];
+const CAR_COLORS = ["#2f7bff", "#ff3b5c"];
 
 let ws: WebSocket | null = null;
 let me = "";
@@ -25,10 +25,9 @@ let status: Status = "lobby";
 let players: Info[] = [];
 let shownSlots = new Set<string>();
 let text = "";
-let typed = 0;
+let self: Player = createPlayer("", "", 0);
 let letters: HTMLSpanElement[] = [];
 let cars = new Map<string, CarState & { shown: number; at: number }>();
-let roadOffset = 0;
 let frame = 0;
 
 const roomParam = new URLSearchParams(location.search).get("room")?.toUpperCase() ?? "";
@@ -154,7 +153,7 @@ function renderWords() {
 }
 
 function placeCaret() {
-  const l = letters[typed];
+  const l = letters[self.typed];
   if (!l) return;
   const word = l.parentElement!;
   const lineHeight = word.offsetHeight;
@@ -167,9 +166,8 @@ function placeCaret() {
 function onCountdown(newText: string, ms: number) {
   status = "countdown";
   text = newText;
-  typed = 0;
-  cars = new Map(players.map((p) => [p.id, { id: p.id, pos: 0, speed: 0, wpm: 0, skid: false, nitro: false, shown: 0, at: 0 }]));
-  roadOffset = 0;
+  self = createPlayer(me, nameOf(me), text.length);
+  cars = new Map(players.map((p) => [p.id, { id: p.id, pos: 0, speed: 0, wpm: 0, slip: false, nitro: false, shown: 0, at: 0 }]));
   $("finish").hidden = true;
   show("race");
   renderWords();
@@ -237,26 +235,57 @@ function onFinish(winner: string | null, forfeit: boolean, results: Result[]) {
   $("finish").hidden = false;
 }
 
-function type(ch: string) {
-  if (status !== "racing" || typed >= text.length) return;
-  send({ t: "key", c: ch });
-  const l = letters[typed]!;
-  if (text[typed] === ch) {
-    l.classList.remove("wrong");
-    l.classList.add("done");
-    typed++;
-    wordsEl.classList.remove("idle");
-    placeCaret();
-  } else {
-    l.classList.remove("wrong");
-    void l.offsetWidth;
-    l.classList.add("wrong");
+const MARK_CLASS = ["", "done", "wrong", "missed"];
+
+const extraEl = document.createElement("span");
+extraEl.className = "extra";
+
+function paint(from: number, to: number) {
+  for (let i = Math.max(0, from); i <= Math.min(to, letters.length - 1); i++) {
+    letters[i]!.className = MARK_CLASS[self.marks[i]!]!;
   }
+  extraEl.textContent = self.extra;
+  if (self.extra) letters[self.typed]?.before(extraEl);
+  else extraEl.remove();
+  wordsEl.classList.remove("idle");
+  placeCaret();
 }
+
+function flashCaret() {
+  caret.classList.remove("over");
+  void caret.offsetWidth;
+  caret.classList.add("over");
+}
+
+function type(ch: string) {
+  if (status !== "racing") return;
+  const before = self.typed;
+  applyKey(text, self, ch, Date.now());
+  send({ t: "key", c: ch });
+  if (self.typed === before && ch !== " " && !self.extra) flashCaret();
+  paint(before, self.typed);
+}
+
+function backspace(wholeWord: boolean) {
+  if (status !== "racing") return;
+  const before = self.typed;
+  applyBackspace(self, wholeWord);
+  send({ t: "back", w: wholeWord });
+  paint(self.typed, before);
+}
+
+ghost.value = "   ";
+
+ghost.addEventListener("keydown", (e) => {
+  if (e.key !== "Backspace") return;
+  e.preventDefault();
+  backspace(e.ctrlKey || e.altKey || e.metaKey);
+});
 
 ghost.addEventListener("beforeinput", (e) => {
   e.preventDefault();
-  for (const ch of e.data ?? "") type(ch);
+  if (e.inputType.startsWith("delete")) backspace(e.inputType.includes("Word"));
+  else for (const ch of e.data ?? "") type(ch);
 });
 
 wordsEl.addEventListener("pointerdown", (e) => {
@@ -268,133 +297,74 @@ document.addEventListener("keydown", (e) => {
   if ((status === "racing" || status === "countdown") && document.activeElement !== ghost && e.key.length === 1) ghost.focus();
 });
 
-function resize() {
-  const dpr = Math.min(devicePixelRatio, 2);
-  canvas.width = canvas.clientWidth * dpr;
-  canvas.height = canvas.clientHeight * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  draw(0);
+let scene: ReturnType<typeof createScene> | null = null;
+let hudFrame = 0;
+
+function getScene() {
+  if (!scene) {
+    try {
+      scene = createScene(canvas);
+      new ResizeObserver(() => scene?.resize()).observe(canvas);
+    } catch {
+      $("countdown").textContent = "This race needs WebGL.";
+    }
+  }
+  return scene;
 }
 
-new ResizeObserver(resize).observe(canvas);
 window.addEventListener("resize", placeCaret);
 
 function startLoop() {
   cancelAnimationFrame(frame);
   let last = performance.now();
+  let finishedFor = 0;
   const loop = (now: number) => {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
-    draw(dt);
-    if (status === "countdown" || status === "racing" || [...cars.values()].some((c) => Math.abs(c.pos - c.shown) > 0.5)) {
+    if (status === "finished") finishedFor += dt;
+    draw(dt, now);
+    if (status === "countdown" || status === "racing" || (status === "finished" && finishedFor < 4)) {
       frame = requestAnimationFrame(loop);
     }
   };
   frame = requestAnimationFrame(loop);
 }
 
-function roundRect(x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-}
-
-function draw(dt: number) {
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  ctx.clearRect(0, 0, w, h);
-  const pad = 20;
-  const startX = 64;
-  const finishX = w - 40;
-  const laneH = (h - pad * 2) / 2;
-  const mine = cars.get(me);
-  roadOffset = (roadOffset + (mine?.speed ?? 0) * dt * 4) % 40;
-
-  for (let i = 0; i < 2; i++) {
-    const y = pad + i * laneH;
-    ctx.fillStyle = "#e9e9e9";
-    roundRect(12, y + 4, w - 24, laneH - 8, 16);
-    ctx.fill();
-  }
-
-  ctx.strokeStyle = "#d6d6d6";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([16, 24]);
-  ctx.lineDashOffset = roadOffset;
-  ctx.beginPath();
-  ctx.moveTo(20, h / 2);
-  ctx.lineTo(w - 20, h / 2);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  ctx.strokeStyle = "#cfcfcf";
-  ctx.beginPath();
-  ctx.moveTo(startX, pad + 8);
-  ctx.lineTo(startX, h - pad - 8);
-  ctx.stroke();
-
-  const cell = 6;
-  for (let y = pad + 4; y < h - pad - 4; y += cell) {
-    for (let c = 0; c < 2; c++) {
-      ctx.fillStyle = (Math.floor((y - pad) / cell) + c) % 2 ? "#171717" : "#ffffff";
-      ctx.fillRect(finishX + c * cell, y, cell, Math.min(cell, h - pad - 4 - y));
+function draw(dt: number, now: number) {
+  const list = players.map((p) => {
+    const car = cars.get(p.id)!;
+    if (status === "finished") {
+      car.pos += car.speed * dt;
+      car.speed *= Math.exp(-dt * 0.8);
+      car.at = now;
     }
-  }
-
-  const now = performance.now();
-  players.forEach((p, i) => {
-    const car = cars.get(p.id);
-    if (!car) return;
-    const target = Math.min(TRACK, car.pos + car.speed * ((now - car.at) / 1000) * (status === "racing" ? 1 : 0));
+    const ahead = status === "racing" ? car.speed * ((now - car.at) / 1000) : 0;
+    const target = status === "racing" ? Math.min(TRACK, car.pos + ahead) : car.pos;
     car.shown += (target - car.shown) * (1 - Math.exp(-dt / 0.08));
-    if (!dt) car.shown = target;
-    const x = startX + (car.shown / TRACK) * (finishX - startX - 44);
-    const y = pad + i * laneH + laneH / 2;
-    drawCar(x, y, CAR_COLORS[i]!, car, p.id === me, p.name);
+    return { pos: car.shown, speed: car.speed, slip: car.slip, nitro: car.nitro, name: p.name, color: colorOf(p.id) };
   });
+  const meIndex = Math.max(0, players.findIndex((p) => p.id === me));
+  getScene()?.render(dt, list, meIndex);
+  if (hudFrame++ % 3 === 0) renderHud(list, meIndex);
 }
 
-function drawCar(x: number, y: number, color: string, car: CarState, isMe: boolean, name: string) {
-  const shake = car.skid ? (Math.random() - 0.5) * 3 : 0;
-  ctx.save();
-  ctx.translate(x, y + shake);
-  if (car.skid) ctx.rotate((Math.random() - 0.5) * 0.08);
-
-  if (car.nitro) {
-    const flame = 14 + Math.random() * 8;
-    const g = ctx.createLinearGradient(-flame, 0, 0, 0);
-    g.addColorStop(0, "rgba(251,146,60,0)");
-    g.addColorStop(1, "rgba(251,146,60,0.9)");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.moveTo(0, -5);
-    ctx.lineTo(-flame, 0);
-    ctx.lineTo(0, 5);
-    ctx.fill();
+function renderHud(list: SceneCar[], meIndex: number) {
+  const mine = list[meIndex];
+  if (!mine) return;
+  $("hud-kmh").textContent = String(Math.round(mine.speed * METERS_PER_UNIT * 3.6));
+  const other = list[1 - meIndex];
+  if (other) {
+    const gap = Math.round((mine.pos - other.pos) * METERS_PER_UNIT);
+    $("hud-place").textContent = gap >= 0 ? "P1" : "P2";
+    $("hud-gap").textContent = gap === 0 ? "level" : `${gap > 0 ? "+" : "−"}${Math.abs(gap)} m`;
   }
-
-  ctx.fillStyle = "rgba(0,0,0,0.08)";
-  roundRect(1, -9, 44, 20, 7);
-  ctx.fill();
-  ctx.fillStyle = "#262626";
-  for (const [wx, wy] of [[6, -12], [30, -12], [6, 8], [30, 8]] as const) {
-    roundRect(wx, wy, 9, 4, 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = color;
-  roundRect(0, -10, 44, 20, 7);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.55)";
-  roundRect(24, -7, 8, 14, 3);
-  ctx.fill();
-  ctx.fillStyle = "rgba(0,0,0,0.12)";
-  roundRect(10, -6, 10, 12, 3);
-  ctx.fill();
-
-  ctx.font = `500 12px "Public Sans", sans-serif`;
-  ctx.fillStyle = isMe ? "#171717" : "#8a8a8a";
-  ctx.textBaseline = "bottom";
-  ctx.fillText(isMe ? "you" : name, 0, -15);
-  ctx.restore();
+  list.forEach((c, i) => {
+    const dot = document.querySelector<HTMLElement>(`.hud-dot[data-i="${i}"]`);
+    if (!dot) return;
+    dot.style.left = `${Math.min(100, (c.pos / TRACK) * 100)}%`;
+    dot.style.background = c.color;
+    dot.classList.toggle("me", i === meIndex);
+  });
 }
 
 $("lobby-form").addEventListener("submit", (e) => {

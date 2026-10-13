@@ -47,6 +47,14 @@
       <section id="race" class="screen" hidden>
         <div class="stage track-stage">
           <canvas id="track" aria-label="race track"></canvas>
+          <div class="hud">
+            <div class="hud-chip hud-speed"><span id="hud-kmh">0</span><small>km/h</small></div>
+            <div class="hud-progress" aria-hidden="true">
+              <span class="hud-dot" data-i="0"></span>
+              <span class="hud-dot" data-i="1"></span>
+            </div>
+            <div class="hud-chip hud-place"><span id="hud-place">P1</span><small id="hud-gap">level</small></div>
+          </div>
           <div id="countdown" class="countdown" aria-live="assertive"></div>
         </div>
         <div id="stats" class="stats"></div>

@@ -6,8 +6,6 @@
   --control: #e7e7e7;
   --faint: #a3a3a3;
   --wrong: #e11d48;
-  --car-0: #5b7fa6;
-  --car-1: #c0736f;
   --shadow-surface: 0 0 0 1px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.04);
   --shadow-popover: 0 0 0 1px rgb(0 0 0 / 0.05), 0 8px 24px rgb(0 0 0 / 0.08);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -283,9 +281,76 @@ h1 {
 }
 
 .track-stage {
-  height: clamp(180px, 30svh, 260px);
+  height: clamp(260px, 48svh, 480px);
   margin-top: 16px;
   overflow: hidden;
+  background: #120a24;
+  isolation: isolate;
+}
+
+.hud {
+  position: absolute;
+  inset: 12px 12px auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: white;
+  pointer-events: none;
+}
+
+.hud-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgb(8 6 20 / 0.5);
+  font-weight: 600;
+}
+
+.hud-speed span {
+  min-width: 2.4ch;
+  font-size: 28px;
+  line-height: 1.1;
+  text-align: right;
+}
+
+.hud-place span {
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.hud-chip small {
+  color: rgb(255 255 255 / 0.65);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.hud-progress {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  margin: 20px 8px 0;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.25), rgb(255 255 255 / 0.25) calc(100% - 6px), white calc(100% - 6px));
+}
+
+.hud-dot {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border: 2px solid white;
+  border-radius: 6px;
+  transform: translate(-50%, -50%);
+}
+
+.hud-dot.me {
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
 }
 
 canvas {
@@ -299,7 +364,8 @@ canvas {
   inset: 0;
   display: grid;
   place-items: center;
-  color: var(--strong);
+  color: white;
+  text-shadow: 0 2px 24px rgb(0 0 0 / 0.5);
   font-size: 72px;
   font-weight: 600;
   pointer-events: none;
@@ -393,16 +459,18 @@ canvas {
 
 .wrong {
   color: var(--wrong);
-  animation: shake 0.3s;
 }
 
-@keyframes shake {
-  25% {
-    transform: translateX(-2px);
-  }
-  75% {
-    transform: translateX(2px);
-  }
+.extra {
+  color: var(--wrong);
+  opacity: 0.7;
+}
+
+.missed {
+  color: var(--wrong);
+  opacity: 0.45;
+  text-decoration: underline 2px;
+  text-underline-offset: 4px;
 }
 
 .caret {
@@ -414,6 +482,17 @@ canvas {
   border-radius: 1px;
   background: var(--strong);
   transition: transform 0.08s linear;
+}
+
+.caret.over {
+  animation: over 0.3s;
+}
+
+@keyframes over {
+  30% {
+    background: var(--wrong);
+    translate: 3px 0;
+  }
 }
 
 .words.idle .caret {
@@ -521,6 +600,10 @@ canvas {
   }
   .words {
     font-size: 19px;
+  }
+  .hud-speed span,
+  .hud-place span {
+    font-size: 22px;
   }
   .row {
     grid-template-columns: auto 1fr auto auto;
