@@ -1,4 +1,9 @@
 import { applyBackspace, applyKey, createPlayer, MARK_OK, TRACK, type Player } from "./game";
+import { renderGarage, startGarage, stopGarage } from "./garage";
+import { startHero, stopHero } from "./hero";
+import { initLeaderboard, refreshLeaderboard } from "./leaderboard";
+import { fetchProfile, playerId, renderMe } from "./profile";
+import { DIFFICULTY, isDifficulty, levelProgress, paintById, type Car, type Difficulty } from "./progress";
 import { createScene, METERS_PER_UNIT, type SceneCar } from "./scene";
 import {
   countSound,
@@ -12,13 +17,14 @@ import {
   unlockAudio,
   updateEngine,
 } from "./sound";
+import { $, bindSeg, countUp, el, replay, setSegEnabled, swapLabel } from "./ui";
 
-type Info = { id: string; name: string };
+type Info = { id: string; name: string; xp: number; level: number; car: Car };
 type Status = "lobby" | "countdown" | "racing" | "finished";
 type CarState = { id: string; pos: number; speed: number; wpm: number; slip: boolean; nitro: boolean };
 type Result = { id: string; name: string; wpm: number; accuracy: number; time: number };
+type Progress = { gained: number; xp: number; level: number; leveledUp: boolean; unlocked: string[] };
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const screens = { lobby: $("lobby"), room: $("room"), race: $("race") };
 const nameInput = $<HTMLInputElement>("name");
 const ghost = $<HTMLInputElement>("ghost");
@@ -27,13 +33,14 @@ const wordsInner = $("words-inner");
 const caret = $("caret");
 const canvas = $<HTMLCanvasElement>("track");
 const countdownEl = $("countdown");
-const CAR_COLORS = ["#2f7bff", "#ff3b5c"];
+const MARK_CLASS = ["", "done", "wrong", "missed"];
 
 let ws: WebSocket | null = null;
 let me = "";
 let code = "";
 let host = "";
 let status: Status = "lobby";
+let difficulty: Difficulty = "normal";
 let players: Info[] = [];
 let shownSlots = new Set<string>();
 let text = "";
@@ -53,56 +60,28 @@ if (roomParam) {
   $("crumb").textContent = `room ${roomParam}`;
 }
 
+void fetchProfile().then((profile) => {
+  if (!profile) return;
+  if (!nameInput.value) nameInput.value = profile.name;
+  renderMe(profile.name, profile.xp);
+});
+
 function show(screen: keyof typeof screens) {
-  for (const [key, el] of Object.entries(screens)) el.hidden = key !== screen;
+  for (const [key, node] of Object.entries(screens)) node.hidden = key !== screen;
   if (screen === "lobby") startHero();
-  else cancelAnimationFrame(heroFrame);
+  else stopHero();
+  if (screen === "room") startGarage();
+  else stopGarage();
+  if (screen === "lobby") void refreshLeaderboard();
 }
 
-const HERO_SPEED = 36;
-const HERO_LOOP = 600;
-const heroCanvas = $<HTMLCanvasElement>("hero-canvas");
-let heroScene: ReturnType<typeof createScene> | null = null;
-let heroFrame = 0;
-let heroVisible = true;
-let heroDistance = 0;
-let heroTime = 0;
-
-new IntersectionObserver(([entry]) => {
-  heroVisible = entry?.isIntersecting ?? true;
-  if (heroVisible && !screens.lobby.hidden) startHero();
-}).observe(heroCanvas);
-
-function startHero() {
-  cancelAnimationFrame(heroFrame);
-  if (!heroScene) {
-    try {
-      heroScene = createScene(heroCanvas);
-      new ResizeObserver(() => heroScene?.resize()).observe(heroCanvas);
-    } catch {
-      return;
-    }
-  }
-  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let last = performance.now();
-  const loop = (now: number) => {
-    const dt = Math.min(0.1, (now - last) / 1000);
-    last = now;
-    heroTime += dt;
-    heroDistance = (heroDistance + HERO_SPEED * dt) % HERO_LOOP;
-    const lead = 150 + heroDistance;
-    const nitro = Math.sin(heroTime * 0.35) > 0.8;
-    heroScene!.render(dt, [
-      { pos: lead + 5 + Math.sin(heroTime * 0.4) * 3, speed: HERO_SPEED + 2, slip: false, nitro: false, name: "", color: CAR_COLORS[1]! },
-      { pos: lead, speed: HERO_SPEED, slip: false, nitro, name: "", color: CAR_COLORS[0]! },
-    ], 1);
-    if (!still && heroVisible && !screens.lobby.hidden) heroFrame = requestAnimationFrame(loop);
-  };
-  heroFrame = requestAnimationFrame(loop);
+function mine() {
+  return players.find((p) => p.id === me);
 }
 
 function colorOf(id: string) {
-  return CAR_COLORS[Math.max(0, players.findIndex((p) => p.id === id))]!;
+  const car = players.find((p) => p.id === id)?.car;
+  return paintById(car?.paint ?? "cobalt")?.color ?? "#2f7bff";
 }
 
 function nameOf(id: string) {
@@ -119,7 +98,7 @@ function connect(room: string) {
     localStorage.setItem("name", name);
   } catch {}
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${proto}://${location.host}/ws?room=${room}&name=${encodeURIComponent(name)}`);
+  ws = new WebSocket(`${proto}://${location.host}/ws?room=${room}&name=${encodeURIComponent(name)}&pid=${playerId}`);
   ws.onmessage = (e) => handle(JSON.parse(e.data));
   ws.onclose = (e) => {
     ws = null;
@@ -142,63 +121,79 @@ function handle(msg: any) {
   else if (msg.t === "countdown") onCountdown(msg.text, msg.ms);
   else if (msg.t === "go") onGo();
   else if (msg.t === "state") onState(msg.players);
-  else if (msg.t === "finish") onFinish(msg.winner, msg.forfeit, msg.results);
+  else if (msg.t === "finish") onFinish(msg.winner, msg.forfeit, msg.results, msg.progress);
 }
 
-function onRoom(msg: { code: string; host: string; status: Status; players: Info[] }) {
+const setDifficulty = bindSeg($("difficulty"), (value) => {
+  if (isDifficulty(value)) send({ t: "difficulty", d: value });
+});
+
+function onRoom(msg: { code: string; host: string; status: Status; difficulty: Difficulty; players: Info[] }) {
   code = msg.code;
   host = msg.host;
   players = msg.players;
+  difficulty = msg.difficulty;
   history.replaceState(null, "", `/?room=${code}`);
   $("crumb").textContent = `room ${code}`;
+  const you = mine();
+  if (you) renderMe(you.name, you.xp);
   if (msg.status !== "lobby") return;
+  const entering = status !== "lobby" || screens.room.hidden;
   status = "lobby";
   $("finish").hidden = true;
-  show("room");
+  if (entering) show("room");
   renderRoom();
 }
 
 function renderRoom() {
-  const slots = $("slots");
-  slots.replaceChildren(
+  $("slots").replaceChildren(
     ...[0, 1].map((i) => {
       const p = players[i];
-      const el = document.createElement("div");
-      if (!p) {
-        el.className = "slot empty";
-        el.textContent = "waiting for a friend…";
-        return el;
-      }
-      el.className = shownSlots.has(p.id) ? "slot" : "slot enter";
-      const tags = [p.id === host && "host", p.id === me && "you"].filter(Boolean);
-      el.innerHTML = `<span class="swatch" style="background:${CAR_COLORS[i]}"></span><div><div class="slot-name"></div><div class="tags">${tags.map((t) => `<span class="tag">${t}</span>`).join("")}</div></div>`;
-      el.querySelector(".slot-name")!.textContent = p.name;
-      return el;
+      if (!p) return el("div", "slot empty", "Waiting for a friend");
+      const slot = el("div", shownSlots.has(p.id) ? "slot" : "slot enter");
+      const swatch = el("span", "swatch");
+      swatch.style.background = colorOf(p.id);
+      const main = el("div", "slot-main");
+      const tags = el("div", "tags");
+      for (const tag of [p.id === host && "host", p.id === me && "you"].filter(Boolean) as string[]) tags.append(el("span", "tag", tag));
+      main.append(el("span", "slot-name", p.name), tags);
+      slot.append(swatch, main, el("span", "level", String(p.level)));
+      return slot;
     }),
   );
   shownSlots = new Set(players.map((p) => p.id));
-  $("link").textContent = `${location.origin}/?room=${code}`;
-  const start = $<HTMLButtonElement>("start");
+
   const isHost = host === me;
   const full = players.length === 2;
+  setDifficulty(difficulty);
+  setSegEnabled($("difficulty"), isHost);
+  $("difficulty-hint").textContent = {
+    easy: "Short, common words. Mistakes cost a little.",
+    normal: "The 200 most common words.",
+    hard: "Long words, capitals and punctuation. Mistakes cost more, XP is higher.",
+  }[difficulty];
+
+  $("link").textContent = `${location.origin}/?room=${code}`;
+  const start = $<HTMLButtonElement>("start");
   start.hidden = !isHost;
   start.disabled = !full;
   $("room-hint").textContent = !full
     ? "Send the link to a friend. Start unlocks when they join."
     : isHost
-      ? "Both players are in."
+      ? `Both players are in. ${DIFFICULTY[difficulty].label} race.`
       : `Waiting for ${nameOf(host)} to start.`;
+
+  const you = mine();
+  if (you) renderGarage(you.level, you.car, (car) => send({ t: "car", ...car }));
 }
 
 function renderWords() {
   letters = [];
   const frag = document.createDocumentFragment();
   for (const word of text.split(/(?<= )/)) {
-    const w = document.createElement("span");
-    w.className = "word";
+    const w = el("span", "word");
     for (const ch of word) {
-      const l = document.createElement("span");
-      l.textContent = ch;
+      const l = el("span", "", ch);
       letters.push(l);
       w.append(l);
     }
@@ -237,9 +232,7 @@ function onCountdown(newText: string, ms: number) {
 }
 
 function flashCount(label: string) {
-  const span = document.createElement("span");
-  span.textContent = label;
-  countdownEl.replaceChildren(span);
+  countdownEl.replaceChildren(el("span", "", label));
   countSound(label === "go");
 }
 
@@ -262,46 +255,90 @@ function onState(list: CarState[]) {
 }
 
 function renderStats() {
-  const stats = $("stats");
-  stats.replaceChildren(
+  $("stats").replaceChildren(
     ...players.map((p) => {
-      const car = cars.get(p.id);
-      const el = document.createElement("div");
-      el.className = "stat";
-      el.innerHTML = `<span class="swatch" style="background:${colorOf(p.id)}"></span><span class="stat-name"></span><span class="stat-wpm">${car?.wpm ?? 0}<small>wpm</small></span>`;
-      el.querySelector(".stat-name")!.textContent = p.id === me ? `${p.name} (you)` : p.name;
-      return el;
+      const stat = el("div", "stat");
+      const swatch = el("span", "swatch");
+      swatch.style.background = colorOf(p.id);
+      const wpm = el("span", "stat-wpm", String(cars.get(p.id)?.wpm ?? 0));
+      wpm.append(el("small", "", "wpm"));
+      stat.append(swatch, el("span", "stat-name", p.id === me ? `${p.name} (you)` : p.name), wpm);
+      return stat;
     }),
   );
 }
 
-function onFinish(winner: string | null, forfeit: boolean, results: Result[]) {
+function onFinish(winner: string | null, forfeit: boolean, results: Result[], progress: Record<string, Progress>) {
   status = "finished";
   wordsEl.classList.add("idle");
   ghost.blur();
   stopEngine();
   finishSound(winner === me);
   $("finish-title").textContent = winner === me ? "You won" : `${nameOf(winner ?? "")} won`;
-  $("finish-sub").textContent = forfeit ? "The other player left the race." : "";
-  const rows = $("finish-rows");
-  rows.replaceChildren(
+  $("finish-sub").textContent = forfeit ? "The other player left the race." : `${DIFFICULTY[difficulty].label} race`;
+  $("finish-rows").replaceChildren(
     ...results
       .sort((a, b) => (a.id === winner ? -1 : b.id === winner ? 1 : 0))
       .map((r) => {
-        const el = document.createElement("div");
-        el.className = "row";
-        el.innerHTML = `<span class="swatch" style="background:${colorOf(r.id)}"></span><strong></strong><span>${r.wpm} wpm</span><span>${r.accuracy}%</span><span class="time">${r.time}s</span>`;
-        el.querySelector("strong")!.textContent = r.id === me ? `${r.name} (you)` : r.name;
-        return el;
+        const row = el("div", "row");
+        const swatch = el("span", "swatch");
+        swatch.style.background = colorOf(r.id);
+        row.append(
+          swatch,
+          el("strong", "", r.id === me ? `${r.name} (you)` : r.name),
+          el("span", "", `${r.wpm} wpm`),
+          el("span", "", `${r.accuracy}%`),
+          el("span", "time", `${r.time}s`),
+        );
+        return row;
       }),
   );
+  renderXp(progress[me]);
   $("finish").hidden = false;
 }
 
-const MARK_CLASS = ["", "done", "wrong", "missed"];
+function renderXp(p: Progress | undefined) {
+  const box = $("finish-xp");
+  box.hidden = !p;
+  if (!p) return;
+  const before = levelProgress(p.xp - p.gained);
+  const after = levelProgress(p.xp);
+  const fill = $("finish-xp-fill");
+  const badge = $("finish-level");
+  badge.textContent = String(before.level);
+  fill.style.transition = "none";
+  fill.style.setProperty("--p", String(before.into / before.needed));
+  void fill.offsetWidth;
+  fill.style.transition = "";
+  countUp($("finish-xp-gain"), p.gained, (n) => `+${n} XP`);
+  requestAnimationFrame(() => {
+    fill.style.setProperty("--p", p.leveledUp ? "1" : String(after.into / after.needed));
+    if (p.leveledUp) {
+      setTimeout(() => {
+        badge.textContent = String(after.level);
+        replay(badge, "pulse");
+        fill.style.transition = "none";
+        fill.style.setProperty("--p", "0");
+        void fill.offsetWidth;
+        fill.style.transition = "";
+        fill.style.setProperty("--p", String(after.into / after.needed));
+      }, 950);
+    }
+  });
+  const unlock = $("finish-unlock");
+  unlock.hidden = !p.leveledUp;
+  unlock.textContent = p.unlocked.length
+    ? `Level ${after.level}. Unlocked ${p.unlocked.join(" and ")} in the garage.`
+    : `Level ${after.level}.`;
+  const you = mine();
+  if (you) {
+    you.xp = p.xp;
+    you.level = p.level;
+    renderMe(you.name, p.xp);
+  }
+}
 
-const extraEl = document.createElement("span");
-extraEl.className = "extra";
+const extraEl = el("span", "extra");
 
 function paint(from: number, to: number) {
   for (let i = Math.max(0, from); i <= Math.min(to, letters.length - 1); i++) {
@@ -314,19 +351,13 @@ function paint(from: number, to: number) {
   placeCaret();
 }
 
-function flashCaret() {
-  caret.classList.remove("over");
-  void caret.offsetWidth;
-  caret.classList.add("over");
-}
-
 function type(ch: string) {
   if (status !== "racing") return;
   const before = self.typed;
   applyKey(text, self, ch, Date.now());
   send({ t: "key", c: ch });
   keySound(self.typed > before && self.marks[self.typed - 1] === MARK_OK);
-  if (self.typed === before && ch !== " " && !self.extra) flashCaret();
+  if (self.typed === before && ch !== " " && !self.extra) replay(caret, "over");
   paint(before, self.typed);
 }
 
@@ -370,7 +401,7 @@ function getScene() {
       scene = createScene(canvas);
       new ResizeObserver(() => scene?.resize()).observe(canvas);
     } catch {
-      $("countdown").textContent = "This race needs WebGL.";
+      countdownEl.textContent = "This race needs WebGL.";
     }
   }
   return scene;
@@ -395,7 +426,7 @@ function startLoop() {
 }
 
 function draw(dt: number, now: number) {
-  const list = players.map((p) => {
+  const list: SceneCar[] = players.map((p) => {
     const car = cars.get(p.id)!;
     if (status === "finished") {
       car.pos += car.speed * dt;
@@ -405,22 +436,22 @@ function draw(dt: number, now: number) {
     const ahead = status === "racing" ? car.speed * ((now - car.at) / 1000) : 0;
     const target = status === "racing" ? Math.min(TRACK, car.pos + ahead) : car.pos;
     car.shown += (target - car.shown) * (1 - Math.exp(-dt / 0.08));
-    return { pos: car.shown, speed: car.speed, slip: car.slip, nitro: car.nitro, name: p.name, color: colorOf(p.id) };
+    return { pos: car.shown, speed: car.speed, slip: car.slip, nitro: car.nitro, name: p.name, color: colorOf(p.id), body: p.car.body };
   });
   const meIndex = Math.max(0, players.findIndex((p) => p.id === me));
   getScene()?.render(dt, list, meIndex);
-  const mine = list[meIndex];
-  if (mine) updateEngine(Math.min(1, (mine.speed * METERS_PER_UNIT * 3.6) / 350), mine.nitro);
+  const mineCar = list[meIndex];
+  if (mineCar) updateEngine(Math.min(1, (mineCar.speed * METERS_PER_UNIT * 3.6) / 350), mineCar.nitro);
   if (hudFrame++ % 3 === 0) renderHud(list, meIndex);
 }
 
 function renderHud(list: SceneCar[], meIndex: number) {
-  const mine = list[meIndex];
-  if (!mine) return;
-  $("hud-kmh").textContent = String(Math.round(mine.speed * METERS_PER_UNIT * 3.6));
+  const mineCar = list[meIndex];
+  if (!mineCar) return;
+  $("hud-kmh").textContent = String(Math.round(mineCar.speed * METERS_PER_UNIT * 3.6));
   const other = list[1 - meIndex];
   if (other) {
-    const gap = Math.round((mine.pos - other.pos) * METERS_PER_UNIT);
+    const gap = Math.round((mineCar.pos - other.pos) * METERS_PER_UNIT);
     $("hud-place").textContent = gap >= 0 ? "P1" : "P2";
     $("hud-gap").textContent = gap === 0 ? "level" : `${gap > 0 ? "+" : "−"}${Math.abs(gap)} m`;
   }
@@ -429,6 +460,7 @@ function renderHud(list: SceneCar[], meIndex: number) {
     if (!dot) return;
     dot.style.left = `${Math.min(100, (c.pos / TRACK) * 100)}%`;
     dot.style.background = c.color;
+    dot.style.color = c.color;
     dot.classList.toggle("me", i === meIndex);
   });
 }
@@ -444,6 +476,7 @@ $("start").addEventListener("click", () => {
   unlockAudio();
   send({ t: "start" });
 });
+
 $("rematch").addEventListener("click", () => {
   unlockAudio();
   send({ t: "rematch" });
@@ -461,13 +494,15 @@ muteBtn.addEventListener("click", () => {
   renderMute();
 });
 renderMute();
+
 $("copy").addEventListener("click", async () => {
-  const btn = $("copy");
   try {
     await navigator.clipboard.writeText($("link").textContent ?? "");
-    btn.textContent = "Copied";
+    swapLabel($("copy"), "Copied", 1600);
   } catch {
-    btn.textContent = "Copy failed";
+    swapLabel($("copy"), "Copy failed", 1600);
   }
-  setTimeout(() => (btn.textContent = "Copy link"), 1500);
 });
+
+initLeaderboard();
+startHero();
