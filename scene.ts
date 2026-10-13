@@ -837,6 +837,13 @@ export function createGarage(canvas: HTMLCanvasElement) {
     angle += dx * 0.012;
     velocity = dx * 0.6;
   });
+  canvas.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    angle += e.key === "ArrowLeft" ? -0.35 : 0.35;
+    velocity = 0;
+    if (!running) draw(0);
+  });
   const release = () => (dragging = false);
   canvas.addEventListener("pointerup", release);
   canvas.addEventListener("pointercancel", release);
