@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "bun --hot server.ts",
     "start": "NODE_ENV=production bun server.ts",
+    "check": "tsc --noEmit",
     "test": "bun test"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "typescript": "^7.0.2"
   }
 }
