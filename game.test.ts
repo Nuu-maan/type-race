@@ -92,6 +92,22 @@ test("wrong letters advance the caret and backspace clears them", () => {
   expect(p.typed).toBe(0);
 });
 
+test("extra letters at the end of a word are erased before real ones", () => {
+  const { race, p } = solo();
+  const end = race.text.indexOf(" ");
+  for (let i = 0; i < end; i++) applyKey(race.text, p, race.text[i]!, i);
+  applyKey(race.text, p, "x", 10);
+  applyKey(race.text, p, "y", 11);
+  expect(p.typed).toBe(end);
+  expect(p.extra).toBe("xy");
+  applyBackspace(p);
+  expect(p.extra).toBe("x");
+  expect(p.typed).toBe(end);
+  applyKey(race.text, p, " ", 12);
+  expect(p.extra).toBe("");
+  expect(p.typed).toBe(end + 1);
+});
+
 test("space mid-word skips to the next word and marks the rest missed", () => {
   const { race, p } = solo();
   applyKey(race.text, p, race.text[0]!, 1);

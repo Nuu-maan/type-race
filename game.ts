@@ -14,6 +14,7 @@ export const NITRO_WORDS = 8;
 export const NITRO_MS = 2000;
 export const NITRO_FACTOR = 1.25;
 export const ACCURACY_KEYS = 50;
+export const MAX_EXTRA = 8;
 
 export const MARK_NONE = 0;
 export const MARK_OK = 1;
@@ -25,6 +26,7 @@ export type Player = {
   name: string;
   typed: number;
   wordStart: number;
+  extra: string;
   marks: Uint8Array;
   pos: number;
   speed: number;
@@ -53,6 +55,7 @@ export function createPlayer(id: string, name: string, textLength: number): Play
     name,
     typed: 0,
     wordStart: 0,
+    extra: "",
     marks: new Uint8Array(textLength),
     pos: 0,
     speed: 0,
@@ -98,6 +101,7 @@ function endWord(p: Player, now: number) {
   if (p.streak > 0 && p.streak % NITRO_WORDS === 0) p.nitroUntil = now + NITRO_MS;
   p.wordClean = true;
   p.wordStart = p.typed;
+  p.extra = "";
 }
 
 export function applyKey(text: string, p: Player, char: string, now: number) {
@@ -122,6 +126,7 @@ export function applyKey(text: string, p: Player, char: string, now: number) {
 
   if (expected === " ") {
     miss(p, now);
+    if (p.extra.length < MAX_EXTRA) p.extra += char;
     return;
   }
 
@@ -138,6 +143,10 @@ export function applyKey(text: string, p: Player, char: string, now: number) {
 
 export function applyBackspace(p: Player, wholeWord = false) {
   if (p.finishedAt !== null) return;
+  if (p.extra) {
+    p.extra = wholeWord ? "" : p.extra.slice(0, -1);
+    if (!wholeWord) return;
+  }
   do {
     if (p.typed <= p.wordStart) return;
     p.marks[--p.typed] = MARK_NONE;
