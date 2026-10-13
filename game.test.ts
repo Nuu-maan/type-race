@@ -1,5 +1,17 @@
 import { expect, test } from "bun:test";
-import { applyKey, createRace, tick, TRACK, type Race, type Player } from "./game";
+import {
+  applyBackspace,
+  applyKey,
+  createRace,
+  MARK_MISSED,
+  MARK_NONE,
+  MARK_OK,
+  MARK_WRONG,
+  tick,
+  TRACK,
+  type Player,
+  type Race,
+} from "./game";
 
 const DT = 0.05;
 
@@ -12,8 +24,8 @@ function drive(race: Race, p: Player, charsPerSec: number, seconds: number, star
     carry += charsPerSec * DT;
     while (carry >= 1) {
       carry--;
-      if (typoEvery && ++keys % typoEvery === 0) applyKey(race, p, "#", now);
-      applyKey(race, p, race.text[p.typed]!, now);
+      const typo = typoEvery && ++keys % typoEvery === 0 && race.text[p.typed] !== " ";
+      applyKey(race.text, p, typo ? "#" : race.text[p.typed]!, now);
     }
     tick(race, DT, now);
   }
@@ -39,8 +51,8 @@ test("faster typing wins", () => {
   let now = 0;
   while (!race.winner && now < 200_000) {
     now += DT * 1000;
-    if (Math.round(now) % 250 === 0) applyKey(race, slow, race.text[slow.typed]!, now);
-    if (Math.round(now) % 100 === 0) applyKey(race, fast, race.text[fast.typed]!, now);
+    if (Math.round(now) % 250 === 0) applyKey(race.text, slow, race.text[slow.typed]!, now);
+    if (Math.round(now) % 100 === 0) applyKey(race.text, fast, race.text[fast.typed]!, now);
     tick(race, DT, now);
   }
   expect(race.winner).toBe("fast");
@@ -54,11 +66,42 @@ test("mistakes slow the car", () => {
   expect(sloppy.p.pos).toBeLessThan(clean.p.pos * 0.85);
 });
 
-test("wrong keys do not advance the caret", () => {
+test("one mistake slows acceleration instead of stopping the car", () => {
   const { race, p } = solo();
-  applyKey(race, p, "#", 10);
+  const now = drive(race, p, 6, 8, 0);
+  const before = p.speed;
+  applyKey(race.text, p, "#", now);
+  drive(race, p, 6, 0.5, now);
+  expect(p.speed).toBeGreaterThan(before * 0.9);
+  expect(p.penalty).toBeGreaterThan(0);
+});
+
+test("wrong letters advance the caret and backspace clears them", () => {
+  const { race, p } = solo();
+  applyKey(race.text, p, race.text[0]!, 1);
+  applyKey(race.text, p, "#", 2);
+  expect(p.typed).toBe(2);
+  expect(p.marks[0]).toBe(MARK_OK);
+  expect(p.marks[1]).toBe(MARK_WRONG);
+  applyBackspace(p);
+  expect(p.typed).toBe(1);
+  expect(p.marks[1]).toBe(MARK_NONE);
+  applyBackspace(p, true);
   expect(p.typed).toBe(0);
-  expect(p.skidUntil).toBeGreaterThan(10);
+  applyBackspace(p);
+  expect(p.typed).toBe(0);
+});
+
+test("space mid-word skips to the next word and marks the rest missed", () => {
+  const { race, p } = solo();
+  applyKey(race.text, p, race.text[0]!, 1);
+  applyKey(race.text, p, " ", 2);
+  const nextWord = race.text.indexOf(" ") + 1;
+  expect(p.typed).toBe(nextWord);
+  expect(p.wordStart).toBe(nextWord);
+  expect(p.marks[1]).toBe(MARK_MISSED);
+  applyBackspace(p);
+  expect(p.typed).toBe(nextWord);
 });
 
 test("car coasts to a stop when typing stops", () => {
@@ -75,7 +118,7 @@ test("eight clean words trigger nitro", () => {
   let words = 0;
   while (words < 8) {
     const c = race.text[p.typed]!;
-    applyKey(race, p, c, (now += 100));
+    applyKey(race.text, p, c, (now += 100));
     if (c === " ") words++;
   }
   expect(p.nitroUntil).toBeGreaterThan(now);

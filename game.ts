@@ -6,22 +6,32 @@ export const WPM_WINDOW_MS = 3000;
 export const MAX_WPM = 200;
 export const TAU_UP = 0.5;
 export const TAU_DOWN = 1.2;
-export const SKID_MS = 400;
-export const SKID_FACTOR = 0.6;
+export const PENALTY_PER_ERROR = 0.35;
+export const PENALTY_ACCEL = 3;
+export const PENALTY_DECAY = 1.5;
+export const SLIP_MS = 350;
 export const NITRO_WORDS = 8;
 export const NITRO_MS = 2000;
 export const NITRO_FACTOR = 1.25;
 export const ACCURACY_KEYS = 50;
 
+export const MARK_NONE = 0;
+export const MARK_OK = 1;
+export const MARK_WRONG = 2;
+export const MARK_MISSED = 3;
+
 export type Player = {
   id: string;
   name: string;
   typed: number;
+  wordStart: number;
+  marks: Uint8Array;
   pos: number;
   speed: number;
+  penalty: number;
   correctTimes: number[];
   recent: boolean[];
-  skidUntil: number;
+  slipUntil: number;
   nitroUntil: number;
   streak: number;
   wordClean: boolean;
@@ -37,16 +47,19 @@ export type Race = {
   winner: string | null;
 };
 
-export function createPlayer(id: string, name: string): Player {
+export function createPlayer(id: string, name: string, textLength: number): Player {
   return {
     id,
     name,
     typed: 0,
+    wordStart: 0,
+    marks: new Uint8Array(textLength),
     pos: 0,
     speed: 0,
+    penalty: 0,
     correctTimes: [],
     recent: [],
-    skidUntil: 0,
+    slipUntil: 0,
     nitroUntil: 0,
     streak: 0,
     wordClean: true,
@@ -57,36 +70,78 @@ export function createPlayer(id: string, name: string): Player {
 }
 
 export function createRace(seed: number, players: { id: string; name: string }[], now: number): Race {
+  const text = generateText(seed);
   return {
-    text: generateText(seed),
+    text,
     startedAt: now,
-    players: players.map((p) => createPlayer(p.id, p.name)),
+    players: players.map((p) => createPlayer(p.id, p.name, text.length)),
     winner: null,
   };
 }
 
-export function applyKey(race: Race, p: Player, char: string, now: number) {
-  if (race.winner || p.finishedAt !== null || p.typed >= race.text.length) return;
+function record(p: Player, ok: boolean) {
   p.totalKeys++;
-  const ok = race.text[p.typed] === char;
   p.recent.push(ok);
   if (p.recent.length > ACCURACY_KEYS) p.recent.shift();
+}
 
-  if (!ok) {
-    p.skidUntil = now + SKID_MS;
-    p.streak = 0;
-    p.wordClean = false;
+function miss(p: Player, now: number) {
+  record(p, false);
+  p.penalty = Math.min(1, p.penalty + PENALTY_PER_ERROR);
+  p.slipUntil = now + SLIP_MS;
+  p.streak = 0;
+  p.wordClean = false;
+}
+
+function endWord(p: Player, now: number) {
+  p.streak = p.wordClean ? p.streak + 1 : 0;
+  if (p.streak > 0 && p.streak % NITRO_WORDS === 0) p.nitroUntil = now + NITRO_MS;
+  p.wordClean = true;
+  p.wordStart = p.typed;
+}
+
+export function applyKey(text: string, p: Player, char: string, now: number) {
+  if (p.finishedAt !== null || p.typed >= text.length) return;
+  const expected = text[p.typed];
+
+  if (char === " ") {
+    if (p.typed === p.wordStart) return;
+    if (expected === " ") {
+      record(p, true);
+      p.correctKeys++;
+      p.correctTimes.push(now);
+      p.marks[p.typed++] = MARK_OK;
+    } else {
+      miss(p, now);
+      while (p.typed < text.length && text[p.typed] !== " ") p.marks[p.typed++] = MARK_MISSED;
+      p.typed++;
+    }
+    endWord(p, now);
     return;
   }
 
-  p.typed++;
-  p.correctKeys++;
-  p.correctTimes.push(now);
-  if (char === " ") {
-    p.streak = p.wordClean ? p.streak + 1 : 0;
-    if (p.streak > 0 && p.streak % NITRO_WORDS === 0) p.nitroUntil = now + NITRO_MS;
-    p.wordClean = true;
+  if (expected === " ") {
+    miss(p, now);
+    return;
   }
+
+  if (char === expected) {
+    record(p, true);
+    p.correctKeys++;
+    p.correctTimes.push(now);
+    p.marks[p.typed++] = MARK_OK;
+  } else {
+    miss(p, now);
+    p.marks[p.typed++] = MARK_WRONG;
+  }
+}
+
+export function applyBackspace(p: Player, wholeWord = false) {
+  if (p.finishedAt !== null) return;
+  do {
+    if (p.typed <= p.wordStart) return;
+    p.marks[--p.typed] = MARK_NONE;
+  } while (wholeWord);
 }
 
 export function wpm(race: Race, p: Player, now: number) {
@@ -106,10 +161,10 @@ export function tick(race: Race, dt: number, now: number) {
   for (const p of race.players) {
     if (p.finishedAt !== null) continue;
     let target = Math.min(wpm(race, p, now), MAX_WPM) * UNITS_PER_WPM * accuracyFactor(p);
-    if (now < p.skidUntil) target *= SKID_FACTOR;
     if (now < p.nitroUntil) target *= NITRO_FACTOR;
-    const tau = target > p.speed ? TAU_UP : TAU_DOWN;
+    const tau = target > p.speed ? TAU_UP * (1 + PENALTY_ACCEL * p.penalty) : TAU_DOWN;
     p.speed += (target - p.speed) * (1 - Math.exp(-dt / tau));
+    p.penalty *= Math.exp(-dt / PENALTY_DECAY);
     p.pos += p.speed * dt;
     if (p.pos >= TRACK) {
       p.pos = TRACK;
@@ -122,10 +177,11 @@ export function tick(race: Race, dt: number, now: number) {
 export function results(race: Race, now: number) {
   return race.players.map((p) => {
     const minutes = ((p.finishedAt ?? now) - race.startedAt) / 60000;
+    const correctChars = p.marks.subarray(0, p.typed).filter((m) => m === MARK_OK).length;
     return {
       id: p.id,
       name: p.name,
-      wpm: Math.round(p.correctKeys / 5 / Math.max(minutes, 1 / 60)),
+      wpm: Math.round(correctChars / 5 / Math.max(minutes, 1 / 60)),
       accuracy: p.totalKeys ? Math.round((p.correctKeys / p.totalKeys) * 100) : 100,
       time: Math.round(minutes * 600) / 10,
       pos: p.pos,
