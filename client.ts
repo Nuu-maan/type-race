@@ -239,10 +239,16 @@ function onFinish(winner: string | null, forfeit: boolean, results: Result[]) {
 
 const MARK_CLASS = ["", "done", "wrong", "missed"];
 
+const extraEl = document.createElement("span");
+extraEl.className = "extra";
+
 function paint(from: number, to: number) {
   for (let i = Math.max(0, from); i <= Math.min(to, letters.length - 1); i++) {
     letters[i]!.className = MARK_CLASS[self.marks[i]!]!;
   }
+  extraEl.textContent = self.extra;
+  if (self.extra) letters[self.typed]?.before(extraEl);
+  else extraEl.remove();
   wordsEl.classList.remove("idle");
   placeCaret();
 }
@@ -258,10 +264,7 @@ function type(ch: string) {
   const before = self.typed;
   applyKey(text, self, ch, Date.now());
   send({ t: "key", c: ch });
-  if (self.typed === before) {
-    if (ch !== " ") flashCaret();
-    return;
-  }
+  if (self.typed === before && ch !== " " && !self.extra) flashCaret();
   paint(before, self.typed);
 }
 

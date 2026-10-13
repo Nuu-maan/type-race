@@ -395,6 +395,11 @@ canvas {
   color: var(--wrong);
 }
 
+.extra {
+  color: var(--wrong);
+  opacity: 0.7;
+}
+
 .missed {
   color: var(--wrong);
   opacity: 0.45;
