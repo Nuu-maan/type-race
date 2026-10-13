@@ -168,7 +168,10 @@ function leave(ws: Socket) {
   const racing = room.status === "countdown" || room.status === "racing";
   if (racing && room.race) {
     const player = room.race.players.find((p) => p.id === ws.data.id);
-    if (player) player.left = true;
+    if (player) {
+      player.left = true;
+      player.speed = 0;
+    }
     const active = room.race.players.filter((p) => !p.left);
     if (active.length < MIN_RACERS && !room.race.winner) finish(room, true);
   }
