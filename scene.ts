@@ -433,7 +433,7 @@ export function createScene(canvas: HTMLCanvasElement) {
   });
   const poolGeo = new THREE.PlaneGeometry(9, 9);
   repeaters.push(
-    repeater(36, Math.ceil(FOG_FAR / 36), (z, g) => {
+    repeater(40, Math.ceil(FOG_FAR / 40), (z, g) => {
       for (const side of [-1, 1]) {
         const x = side * (ROAD_W / 2 + 3.2);
         const pole = new THREE.Mesh(poleGeo, postMat);
