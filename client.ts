@@ -55,6 +55,50 @@ if (roomParam) {
 
 function show(screen: keyof typeof screens) {
   for (const [key, el] of Object.entries(screens)) el.hidden = key !== screen;
+  if (screen === "lobby") startHero();
+  else cancelAnimationFrame(heroFrame);
+}
+
+const HERO_SPEED = 36;
+const HERO_LOOP = 600;
+const heroCanvas = $<HTMLCanvasElement>("hero-canvas");
+let heroScene: ReturnType<typeof createScene> | null = null;
+let heroFrame = 0;
+let heroVisible = true;
+let heroDistance = 0;
+let heroTime = 0;
+
+new IntersectionObserver(([entry]) => {
+  heroVisible = entry?.isIntersecting ?? true;
+  if (heroVisible && !screens.lobby.hidden) startHero();
+}).observe(heroCanvas);
+
+function startHero() {
+  cancelAnimationFrame(heroFrame);
+  if (!heroScene) {
+    try {
+      heroScene = createScene(heroCanvas);
+      new ResizeObserver(() => heroScene?.resize()).observe(heroCanvas);
+    } catch {
+      return;
+    }
+  }
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let last = performance.now();
+  const loop = (now: number) => {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    heroTime += dt;
+    heroDistance = (heroDistance + HERO_SPEED * dt) % HERO_LOOP;
+    const lead = 150 + heroDistance;
+    const nitro = Math.sin(heroTime * 0.35) > 0.8;
+    heroScene!.render(dt, [
+      { pos: lead + 5 + Math.sin(heroTime * 0.4) * 3, speed: HERO_SPEED + 2, slip: false, nitro: false, name: "", color: CAR_COLORS[1]! },
+      { pos: lead, speed: HERO_SPEED, slip: false, nitro, name: "", color: CAR_COLORS[0]! },
+    ], 1);
+    if (!still && heroVisible && !screens.lobby.hidden) heroFrame = requestAnimationFrame(loop);
+  };
+  heroFrame = requestAnimationFrame(loop);
 }
 
 function colorOf(id: string) {
