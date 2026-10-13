@@ -1,12 +1,14 @@
 import type { ServerWebSocket } from "bun";
 import index from "./index.html";
 import { ensurePlayer, getProfile, leaderboard, recordRace, setCar } from "./db";
-import { applyBackspace, applyKey, createRace, results, tick, wpm, type Race } from "./game";
+import { applyBackspace, applyKey, createRace, FINISH_GRACE_MS, raceOver, results, tick, wpm, type Race } from "./game";
 import {
   canUse,
   DEFAULT_CARS,
   isDifficulty,
   levelFromXp,
+  MAX_RACERS,
+  MIN_RACERS,
   raceXp,
   unlockedBetween,
   type Car,
@@ -55,6 +57,8 @@ function roomInfo(room: Room) {
     host: room.host,
     status: room.status,
     difficulty: room.difficulty,
+    max: MAX_RACERS,
+    min: MIN_RACERS,
     players: room.members.map((m) => ({
       id: m.data.id,
       name: m.data.name,
@@ -70,39 +74,47 @@ function stopTimer(room: Room) {
   room.timer = null;
 }
 
-function award(room: Room, winner: string | null, rows: ReturnType<typeof results>) {
+function award(room: Room, rows: ReturnType<typeof results>) {
   const progress: Record<string, { gained: number; xp: number; level: number; leveledUp: boolean; unlocked: string[] }> = {};
+  const racers = rows.filter((r) => !r.left).length;
   for (const row of rows) {
     const member = room.members.find((m) => m.data.id === row.id);
-    if (!member) continue;
-    const won = row.id === winner;
-    const gained = raceXp(row.wpm, row.accuracy, room.difficulty, won);
+    if (!member || row.left) continue;
+    const place = row.finished ? row.place : racers;
+    const gained = raceXp(row.wpm, row.accuracy, room.difficulty, place, racers);
     const before = levelFromXp(member.data.xp);
     member.data.xp += gained;
     const after = levelFromXp(member.data.xp);
     if (member.data.pid) {
-      recordRace({ player: member.data.pid, difficulty: room.difficulty, wpm: row.wpm, accuracy: row.accuracy, won, xp: gained });
+      recordRace({
+        player: member.data.pid,
+        difficulty: room.difficulty,
+        wpm: row.wpm,
+        accuracy: row.accuracy,
+        won: row.place === 1 && row.finished,
+        xp: gained,
+      });
     }
     progress[row.id] = { gained, xp: member.data.xp, level: after, leveledUp: after > before, unlocked: unlockedBetween(before, after) };
   }
   return progress;
 }
 
-function finish(room: Room, winner: string | null, forfeit = false) {
+function finish(room: Room, forfeit = false) {
   stopTimer(room);
   room.status = "finished";
   const rows = room.race ? results(room.race, Date.now()) : [];
   broadcast(room, {
     t: "finish",
-    winner,
+    winner: forfeit ? rows[0]?.id : (room.race?.winner ?? rows[0]?.id),
     forfeit,
     results: rows,
-    progress: forfeit ? {} : award(room, winner, rows),
+    progress: forfeit ? {} : award(room, rows),
   });
 }
 
 function startRace(room: Room) {
-  if (room.status !== "lobby" || room.members.length !== 2) return;
+  if (room.status !== "lobby" || room.members.length < MIN_RACERS) return;
   const now = Date.now();
   room.race = createRace(
     Math.floor(Math.random() * 2 ** 31),
@@ -134,9 +146,12 @@ function startRace(room: Room) {
         wpm: Math.round(wpm(race, p, t)),
         slip: t < p.slipUntil,
         nitro: t < p.nitroUntil,
+        place: p.place,
+        left: p.left,
       })),
+      graceEndsAt: race.firstFinishAt === null ? null : race.firstFinishAt + FINISH_GRACE_MS - t,
     });
-    if (race.winner) finish(room, race.winner);
+    if (raceOver(race, t)) finish(room);
   }, TICK_MS);
 }
 
@@ -150,8 +165,13 @@ function leave(ws: Socket) {
     return;
   }
   if (room.host === ws.data.id) room.host = room.members[0]!.data.id;
-  if (room.status === "countdown" || room.status === "racing") finish(room, room.members[0]!.data.id, true);
-  else if (room.status === "finished") room.status = "lobby";
+  const racing = room.status === "countdown" || room.status === "racing";
+  if (racing && room.race) {
+    const player = room.race.players.find((p) => p.id === ws.data.id);
+    if (player) player.left = true;
+    const active = room.race.players.filter((p) => !p.left);
+    if (active.length < MIN_RACERS && !room.race.winner) finish(room, true);
+  }
   broadcast(room, roomInfo(room));
 }
 
@@ -210,9 +230,17 @@ export const server = Bun.serve({
         };
         rooms.set(room.code, room);
       }
-      if (!room) return ws.close(4004, "Room not found");
-      if (room.members.length >= 2) return ws.close(4003, "Room is full");
-      const fallback = DEFAULT_CARS[room.members.length]!;
+      if (!room) return ws.close(4004, "Room not found. Check the link or create a new room.");
+      if (room.members.length >= MAX_RACERS) return ws.close(4003, `This room is full (${MAX_RACERS} racers). Ask the host for a new link.`);
+      if (room.status === "countdown" || room.status === "racing") {
+        return ws.close(4009, "This race has already started. Try the link again when it finishes.");
+      }
+      if (room.status === "finished") {
+        room.status = "lobby";
+        room.race = null;
+      }
+      const taken = new Set(room.members.map((m) => m.data.car.paint));
+      const fallback = DEFAULT_CARS.find((c) => !taken.has(c.paint)) ?? DEFAULT_CARS[0]!;
       if (ws.data.pid) {
         const profile = ensurePlayer(ws.data.pid, ws.data.name, fallback.paint);
         ws.data.xp = profile.xp;
