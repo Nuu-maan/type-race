@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#0b0816" />
+    <meta name="theme-color" content="#0b0a08" />
     <title>type race</title>
     <meta name="description" content="A two-player typing race. Type fast, drive fast." />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%232de2ff'/%3E%3Cstop offset='1' stop-color='%23ff3df2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='%230b0816'/%3E%3Cpath d='M6 12h10M4 17h8M8 22h7' stroke='url(%23g)' stroke-width='2.4' stroke-linecap='round'/%3E%3Crect x='17' y='13' width='11' height='8' rx='3' fill='url(%23g)'/%3E%3C/svg%3E" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0a08'/%3E%3Cpath d='M6 12h10M4 17h8M8 22h7' stroke='%23f6f5f2' stroke-width='2.4' stroke-linecap='round'/%3E%3Crect x='17' y='13' width='11' height='8' rx='3' fill='%23fbd530'/%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -21,16 +21,16 @@
       <header class="bar">
         <a class="brand" href="/">
           <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
-            <defs>
-              <linearGradient id="mark-g" x1="0" x2="1"><stop offset="0" stop-color="#2de2ff" /><stop offset="1" stop-color="#ff3df2" /></linearGradient>
-            </defs>
-            <path d="M6 12h10M4 17h8M8 22h7" stroke="url(#mark-g)" stroke-width="2.4" stroke-linecap="round" />
-            <rect x="17" y="13" width="11" height="8" rx="3" fill="url(#mark-g)" />
+            <path d="M6 12h10M4 17h8M8 22h7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+            <rect x="17" y="13" width="11" height="8" rx="3" fill="var(--color-accent-solid)" />
           </svg>
-          type race
+          <span class="brand-text">type race</span>
         </a>
-        <span class="slash">/</span>
-        <span id="crumb" class="crumb">race a friend by typing</span>
+        <nav class="tabs" aria-label="Sections">
+          <a href="/" data-view="lobby" aria-current="page">Play</a>
+          <a href="/?view=live" data-view="live">Live races<span id="live-count" class="badge" hidden>0</span></a>
+        </nav>
+        <span id="crumb" class="crumb"></span>
         <div class="bar-end">
           <div id="me-chip" class="me-chip" hidden>
             <span id="me-level" class="level">1</span>
@@ -50,11 +50,12 @@
         <div class="hero">
           <canvas id="hero-canvas" aria-hidden="true"></canvas>
           <div class="hero-content">
-            <p class="eyebrow">2 players · same words · one track</p>
+            <p class="eyebrow">2 to 5 racers · same words · one track</p>
             <h1>Type fast.<br />Drive fast.</h1>
             <p class="lede">Race a friend in real time. Your typing speed is your car's speed.</p>
+            <label class="field-label" for="name">Racer name</label>
             <form id="lobby-form" class="field">
-              <input id="name" placeholder="your name" maxlength="16" autocomplete="off" spellcheck="false" aria-label="your name" />
+              <input id="name" name="nickname" placeholder="e.g. Numan" maxlength="16" autocomplete="nickname" spellcheck="false" />
               <button id="lobby-btn" class="btn primary" type="submit">Create room</button>
             </form>
             <p id="lobby-error" class="error" role="alert"></p>
@@ -65,16 +66,16 @@
           <h2 id="how-title">How it plays</h2>
           <ol class="steps">
             <li><span class="step-n">1</span><h3>Open a room</h3><p>Pick a name and create a room. You're the host.</p></li>
-            <li><span class="step-n">2</span><h3>Send the link</h3><p>Your friend opens it on their own device. Start unlocks when they join.</p></li>
-            <li><span class="step-n">3</span><h3>Type to drive</h3><p>You both get the same words. Type faster, go faster.</p></li>
+            <li><span class="step-n">2</span><h3>Send the link</h3><p>Up to four friends join from their own devices. Start unlocks at two racers.</p></li>
+            <li><span class="step-n">3</span><h3>Type to drive</h3><p>Everyone gets the same words. Type faster, go faster.</p></li>
           </ol>
           <div class="rules">
             <div class="rule">
-              <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 3.5a6.5 6.5 0 0 0-6.5 6.5c0 1.3.4 2.5 1 3.5h11a6.5 6.5 0 0 0-5.5-10z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m9 10.5 3-3" stroke="#0b0816" stroke-width="1.6" stroke-linecap="round" /></svg>
+              <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 3.5a6.5 6.5 0 0 0-6.5 6.5c0 1.3.4 2.5 1 3.5h11a6.5 6.5 0 0 0-5.5-10z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m9 10.5 3-3" stroke="var(--color-bg-page)" stroke-width="1.6" stroke-linecap="round" /></svg>
               <div><h3>Speed is your WPM</h3><p>Measured over the last three seconds, with momentum.</p></div>
             </div>
             <div class="rule">
-              <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="2.5" width="13" height="13" rx="4" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m7 7 4 4m0-4-4 4" stroke="#0b0816" stroke-width="1.6" stroke-linecap="round" /></svg>
+              <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="2.5" width="13" height="13" rx="4" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m7 7 4 4m0-4-4 4" stroke="var(--color-bg-page)" stroke-width="1.6" stroke-linecap="round" /></svg>
               <div><h3>Mistakes cost acceleration</h3><p>Wrong letters show red and you keep going, but you pick up speed slower.</p></div>
             </div>
             <div class="rule">
@@ -83,7 +84,7 @@
             </div>
             <div class="rule">
               <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2.5 11 6.6l4.5.6-3.3 3.1.8 4.5L9 12.7l-4 2.1.8-4.5-3.3-3.1 4.5-.6z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
-              <div><h3>Level up your car</h3><p>Every race earns XP. New paints and bodies unlock as you level.</p></div>
+              <div><h3>Level up your car</h3><p>Every race earns XP, more for a podium finish. New paints and bodies unlock as you level.</p></div>
             </div>
           </div>
         </section>
@@ -102,10 +103,21 @@
         </section>
       </section>
 
+      <section id="live" class="screen" hidden aria-labelledby="live-title">
+        <div class="section-head live-head">
+          <div>
+            <h1 id="live-title" class="page-title">Live races</h1>
+            <p class="hint">Watch any race in progress. The list updates on its own.</p>
+          </div>
+          <a class="btn primary" href="/">Start a race</a>
+        </div>
+        <ol id="live-list" class="live-list" aria-live="polite"></ol>
+      </section>
+
       <section id="room" class="screen" hidden>
         <div class="room-grid">
           <div class="garage">
-            <canvas id="garage-canvas" class="garage-canvas" aria-label="your car, drag to turn"></canvas>
+            <canvas id="garage-canvas" class="garage-canvas" tabindex="0" aria-label="Your car. Drag or use the arrow keys to turn it."></canvas>
             <div class="garage-controls">
               <div class="garage-row">
                 <h3>Paint</h3>
@@ -119,6 +131,10 @@
             </div>
           </div>
           <div class="room-panel">
+            <div class="panel-head">
+              <h2 id="room-title" class="panel-title">Racers</h2>
+              <span class="watch-chip" title="Spectators"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 4C5.4 4 2.9 6.6 2 9c.9 2.4 3.4 5 7 5s6.1-2.6 7-5c-.9-2.4-3.4-5-7-5z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><circle cx="9" cy="9" r="2.2" fill="var(--color-bg-page)" /></svg><span id="room-watch">0</span><span class="sr-only">watching</span></span>
+            </div>
             <div id="slots" class="slots"></div>
             <div class="panel-row">
               <h3>Difficulty</h3>
@@ -130,9 +146,19 @@
               </div>
               <p id="difficulty-hint" class="hint"></p>
             </div>
-            <div class="share">
-              <span id="link" class="link"></span>
-              <button id="copy" class="btn small" type="button"><span class="swap" data-label="Copy link">Copy link</span></button>
+            <div class="panel-row">
+              <h3>Invite racers</h3>
+              <div class="share">
+                <span id="link" class="link"></span>
+                <button id="copy" class="btn small" type="button"><span class="swap" data-label="Copy link">Copy link</span></button>
+              </div>
+            </div>
+            <div class="panel-row">
+              <h3>Invite spectators</h3>
+              <div class="share">
+                <span id="watch-link" class="link"></span>
+                <button id="copy-watch" class="btn small" type="button"><span class="swap" data-label="Copy link">Copy link</span></button>
+              </div>
             </div>
             <button id="start" class="btn primary start" type="button" disabled>Start race</button>
             <p id="room-hint" class="hint center"></p>
@@ -144,24 +170,35 @@
         <div class="stage track-stage">
           <canvas id="track" aria-label="race track"></canvas>
           <div class="hud">
-            <div class="hud-chip hud-speed"><span id="hud-kmh">0</span><small>km/h</small></div>
-            <div class="hud-progress" aria-hidden="true">
-              <span class="hud-dot" data-i="0"></span>
-              <span class="hud-dot" data-i="1"></span>
+            <div class="hud-top">
+              <div class="track-bar" aria-hidden="true">
+                <span class="track-line"><span id="track-fill" class="track-fill"></span></span>
+                <svg class="flag" viewBox="0 0 18 18"><path d="M4.5 15.5V3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /><path d="M4.5 3.5h9l-2 3 2 3h-9z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+                <div id="markers" class="markers"></div>
+              </div>
+              <span id="hud-watch-chip" class="hud-chip hud-watch" title="Spectators"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 4C5.4 4 2.9 6.6 2 9c.9 2.4 3.4 5 7 5s6.1-2.6 7-5c-.9-2.4-3.4-5-7-5z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><circle cx="9" cy="9" r="2.2" fill="var(--color-bg-page)" /></svg><span id="hud-watch">0</span><span class="sr-only">watching</span></span>
+              <span class="hud-chip hud-togo"><span id="hud-togo">2000</span><small>m to go</small></span>
             </div>
-            <div class="hud-chip hud-place"><span id="hud-place">P1</span><small id="hud-gap">level</small></div>
+            <ol id="tower" class="tower" aria-label="Positions"></ol>
+            <div class="hud-chip hud-speed"><span id="hud-kmh">0</span><small>km/h</small><small class="hud-sub"><span id="hud-wpm">0</span> wpm</small></div>
+            <div class="hud-chip hud-place"><span id="hud-place">P1</span><small id="hud-of">of 2</small></div>
+            <p id="finished-banner" class="banner" role="status" hidden></p>
           </div>
           <div id="countdown" class="countdown" aria-live="assertive"></div>
         </div>
-        <div id="stats" class="stats"></div>
         <div id="words" class="words" aria-label="words to type">
           <div id="words-inner" class="words-inner"></div>
           <div id="caret" class="caret"></div>
         </div>
-        <p class="hint keys">Backspace fixes a letter · Ctrl+Backspace clears the word</p>
+        <p id="keys-hint" class="hint keys">Backspace fixes a letter · Ctrl+Backspace clears the word</p>
+        <div id="spectate-bar" class="spectate-bar" hidden>
+          <span class="watch-chip"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 4C5.4 4 2.9 6.6 2 9c.9 2.4 3.4 5 7 5s6.1-2.6 7-5c-.9-2.4-3.4-5-7-5z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><circle cx="9" cy="9" r="2.2" fill="var(--color-bg-page)" /></svg>Spectating</span>
+          <p id="spectate-follow" class="hint">Following the leader. Select a racer in the tower to follow them.</p>
+          <button id="copy-watch-race" class="btn small" type="button"><span class="swap" data-label="Copy watch link">Copy watch link</span></button>
+        </div>
         <input id="ghost" class="ghost" aria-label="type here" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" />
         <div id="finish" class="finish" hidden>
-          <div class="card" role="dialog" aria-modal="true" aria-labelledby="finish-title">
+          <div class="card" role="dialog" aria-modal="true" aria-labelledby="finish-title" tabindex="-1">
             <h2 id="finish-title"></h2>
             <p id="finish-sub" class="hint"></p>
             <div id="finish-rows" class="rows"></div>
@@ -173,7 +210,8 @@
               </div>
               <p id="finish-unlock" class="unlock" hidden></p>
             </div>
-            <button id="rematch" class="btn primary" type="button">Rematch</button>
+            <button id="rematch" class="btn primary" type="button">Race again</button>
+            <a id="to-live" class="btn" href="/?view=live" hidden>Watch another race</a>
           </div>
         </div>
       </section>
