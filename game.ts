@@ -1,3 +1,4 @@
+import { DIFFICULTY, type Difficulty } from "./progress";
 import { generateText } from "./words";
 
 export const TRACK = 1000;
@@ -6,7 +7,6 @@ export const WPM_WINDOW_MS = 3000;
 export const MAX_WPM = 200;
 export const TAU_UP = 0.5;
 export const TAU_DOWN = 1.2;
-export const PENALTY_PER_ERROR = 0.35;
 export const PENALTY_ACCEL = 3;
 export const PENALTY_DECAY = 1.5;
 export const SLIP_MS = 350;
@@ -31,6 +31,7 @@ export type Player = {
   pos: number;
   speed: number;
   penalty: number;
+  errorPenalty: number;
   correctTimes: number[];
   recent: boolean[];
   slipUntil: number;
@@ -44,12 +45,13 @@ export type Player = {
 
 export type Race = {
   text: string;
+  difficulty: Difficulty;
   startedAt: number;
   players: Player[];
   winner: string | null;
 };
 
-export function createPlayer(id: string, name: string, textLength: number): Player {
+export function createPlayer(id: string, name: string, textLength: number, difficulty: Difficulty = "normal"): Player {
   return {
     id,
     name,
@@ -60,6 +62,7 @@ export function createPlayer(id: string, name: string, textLength: number): Play
     pos: 0,
     speed: 0,
     penalty: 0,
+    errorPenalty: DIFFICULTY[difficulty].errorPenalty,
     correctTimes: [],
     recent: [],
     slipUntil: 0,
@@ -72,12 +75,18 @@ export function createPlayer(id: string, name: string, textLength: number): Play
   };
 }
 
-export function createRace(seed: number, players: { id: string; name: string }[], now: number): Race {
-  const text = generateText(seed);
+export function createRace(
+  seed: number,
+  players: { id: string; name: string }[],
+  now: number,
+  difficulty: Difficulty = "normal",
+): Race {
+  const text = generateText(seed, difficulty);
   return {
     text,
+    difficulty,
     startedAt: now,
-    players: players.map((p) => createPlayer(p.id, p.name, text.length)),
+    players: players.map((p) => createPlayer(p.id, p.name, text.length, difficulty)),
     winner: null,
   };
 }
@@ -90,7 +99,7 @@ function record(p: Player, ok: boolean) {
 
 function miss(p: Player, now: number) {
   record(p, false);
-  p.penalty = Math.min(1, p.penalty + PENALTY_PER_ERROR);
+  p.penalty = Math.min(1, p.penalty + p.errorPenalty);
   p.slipUntil = now + SLIP_MS;
   p.streak = 0;
   p.wordClean = false;

@@ -140,6 +140,14 @@ test("eight clean words trigger nitro", () => {
   expect(p.nitroUntil).toBeGreaterThan(now);
 });
 
+test("hard races punish mistakes more than easy ones", () => {
+  const easy = createRace(1, [{ id: "a", name: "a" }], 0, "easy").players[0]!;
+  const hard = createRace(1, [{ id: "a", name: "a" }], 0, "hard").players[0]!;
+  applyKey("ab", easy, "#", 1);
+  applyKey("ab", hard, "#", 1);
+  expect(hard.penalty).toBeGreaterThan(easy.penalty);
+});
+
 test("speed is capped against key floods", () => {
   const { race, p } = solo();
   drive(race, p, 500, 3, 0);
