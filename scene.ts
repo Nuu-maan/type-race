@@ -19,8 +19,14 @@ export type SceneCar = {
   color: string;
 };
 
-const LANE_X = [-2.4, 2.4];
-const ROAD_W = 11;
+const LANE_W = 2.6;
+const LANE_X = [-2, -1, 0, 1, 2].map((k) => k * LANE_W);
+const LANE_SETS: Record<number, number[]> = { 1: [2], 2: [1, 3], 3: [1, 2, 3], 4: [0, 1, 3, 4], 5: [0, 1, 2, 3, 4] };
+const ROAD_W = LANE_W * 5 + 1.6;
+
+export function laneX(index: number, count: number) {
+  return LANE_X[LANE_SETS[count]?.[index] ?? 2]!;
+}
 const ROAD_LEN = 760;
 const FOG_NEAR = 80;
 const FOG_FAR = 620;
@@ -63,9 +69,13 @@ function roadTexture() {
       g.fillStyle = grad;
       g.fillRect(mx(lane - 1.4), 0, mx(lane + 1.4) - mx(lane - 1.4), 1024);
     }
+    const line = 0.15 * (512 / ROAD_W);
     g.fillStyle = "#e9e6f0";
-    for (const edge of [-ROAD_W / 2 + 0.35, ROAD_W / 2 - 0.5]) g.fillRect(mx(edge), 0, 0.15 * (512 / ROAD_W), 1024);
-    for (let k = 0; k < 4; k++) g.fillRect(mx(-0.08), k * 6 * pxPerM, 0.16 * (512 / ROAD_W), 3 * pxPerM);
+    for (const edge of [-ROAD_W / 2 + 0.35, ROAD_W / 2 - 0.5]) g.fillRect(mx(edge), 0, line, 1024);
+    g.fillStyle = "rgba(233,230,240,0.7)";
+    for (const divider of [-1.5, -0.5, 0.5, 1.5]) {
+      for (let k = 0; k < 4; k++) g.fillRect(mx(divider * LANE_W) - line / 2, k * 6 * pxPerM, line, 3 * pxPerM);
+    }
   });
 }
 
@@ -566,6 +576,7 @@ export function createScene(canvas: HTMLCanvasElement) {
       scene.add(c.car);
       cars[i] = { ...c, label: null, labelText: "", key };
     });
+    for (const extra of cars.splice(list.length)) extra.car.removeFromParent();
   }
 
   const SPEED_LINES = 90;
@@ -640,7 +651,8 @@ export function createScene(canvas: HTMLCanvasElement) {
     list.forEach((c, i) => {
       const car = cars[i]!;
       const z = -(c.pos - me.pos) * METERS_PER_UNIT;
-      car.car.position.set(LANE_X[i] ?? 0, 0, z);
+      const x = laneX(i, list.length);
+      car.car.position.set(x, 0, z);
       const speed = c.speed * METERS_PER_UNIT;
       const accel = dt ? (speed - car.prevSpeed) / dt : 0;
       car.prevSpeed = speed;
@@ -657,11 +669,11 @@ export function createScene(canvas: HTMLCanvasElement) {
         f.scale.set(1, 0.7 + Math.random() * 0.6, 1);
       }
       if (c.slip && Math.random() < 0.7) {
-        for (const x of [-0.9, 0.9]) {
+        for (const side of [-0.9, 0.9]) {
           const p = smoke[smokeIndex++ % smoke.length]!;
           p.life = 1;
           p.s.visible = true;
-          p.s.position.set((LANE_X[i] ?? 0) + x, 0.35, z + 1.6);
+          p.s.position.set(car.car.position.x + side, 0.35, z + 1.6);
           p.s.scale.setScalar(0.45);
         }
       }
@@ -694,7 +706,7 @@ export function createScene(canvas: HTMLCanvasElement) {
     });
     lineGeo.attributes.position!.needsUpdate = true;
 
-    const laneX = LANE_X[meIndex] ?? 0;
+    const myLane = laneX(meIndex, list.length);
     const targetFov = 58 + 24 * fast + (me.nitro ? 8 : 0);
     fov += (targetFov - fov) * Math.min(1, dt * 3);
     camera.fov = fov;
@@ -702,11 +714,11 @@ export function createScene(canvas: HTMLCanvasElement) {
     const shake = (0.02 + (me.nitro ? 0.05 : 0)) * fast * fast;
     const narrow = THREE.MathUtils.clamp(1.4 - camera.aspect, 0, 0.8);
     camera.position.set(
-      laneX * 0.55 * (1 - narrow) + (Math.random() - 0.5) * shake,
+      myLane * 0.55 * (1 - narrow) + (Math.random() - 0.5) * shake,
       2.5 + narrow * 1.6 + (Math.random() - 0.5) * shake,
       7.2 + narrow * 7 - fast * 0.8,
     );
-    camera.lookAt(laneX * 0.35 * (1 - narrow), 0.9, -16);
+    camera.lookAt(myLane * 0.35 * (1 - narrow), 0.9, -16);
     sky.position.copy(camera.position);
 
     composer.render(dt);
