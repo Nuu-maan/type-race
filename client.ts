@@ -1,5 +1,17 @@
-import { applyBackspace, applyKey, createPlayer, TRACK, type Player } from "./game";
+import { applyBackspace, applyKey, createPlayer, MARK_OK, TRACK, type Player } from "./game";
 import { createScene, METERS_PER_UNIT, type SceneCar } from "./scene";
+import {
+  countSound,
+  finishSound,
+  isMuted,
+  keySound,
+  nitroSound,
+  setMuted,
+  startEngine,
+  stopEngine,
+  unlockAudio,
+  updateEngine,
+} from "./sound";
 
 type Info = { id: string; name: string };
 type Status = "lobby" | "countdown" | "racing" | "finished";
@@ -67,6 +79,7 @@ function connect(room: string) {
   ws.onmessage = (e) => handle(JSON.parse(e.data));
   ws.onclose = (e) => {
     ws = null;
+    stopEngine();
     status = "lobby";
     show("lobby");
     $("finish").hidden = true;
@@ -183,11 +196,13 @@ function flashCount(label: string) {
   const span = document.createElement("span");
   span.textContent = label;
   countdownEl.replaceChildren(span);
+  countSound(label === "go");
 }
 
 function onGo() {
   status = "racing";
   flashCount("go");
+  startEngine();
   ghost.focus();
 }
 
@@ -195,7 +210,9 @@ function onState(list: CarState[]) {
   const now = performance.now();
   for (const s of list) {
     const car = cars.get(s.id);
-    if (car) Object.assign(car, s, { at: now });
+    if (!car) continue;
+    if (s.id === me && s.nitro && !car.nitro) nitroSound();
+    Object.assign(car, s, { at: now });
   }
   renderStats();
 }
@@ -218,6 +235,8 @@ function onFinish(winner: string | null, forfeit: boolean, results: Result[]) {
   status = "finished";
   wordsEl.classList.add("idle");
   ghost.blur();
+  stopEngine();
+  finishSound(winner === me);
   $("finish-title").textContent = winner === me ? "You won" : `${nameOf(winner ?? "")} won`;
   $("finish-sub").textContent = forfeit ? "The other player left the race." : "";
   const rows = $("finish-rows");
@@ -262,6 +281,7 @@ function type(ch: string) {
   const before = self.typed;
   applyKey(text, self, ch, Date.now());
   send({ t: "key", c: ch });
+  keySound(self.typed > before && self.marks[self.typed - 1] === MARK_OK);
   if (self.typed === before && ch !== " " && !self.extra) flashCaret();
   paint(before, self.typed);
 }
@@ -345,6 +365,8 @@ function draw(dt: number, now: number) {
   });
   const meIndex = Math.max(0, players.findIndex((p) => p.id === me));
   getScene()?.render(dt, list, meIndex);
+  const mine = list[meIndex];
+  if (mine) updateEngine(Math.min(1, (mine.speed * METERS_PER_UNIT * 3.6) / 350), mine.nitro);
   if (hudFrame++ % 3 === 0) renderHud(list, meIndex);
 }
 
@@ -369,12 +391,32 @@ function renderHud(list: SceneCar[], meIndex: number) {
 
 $("lobby-form").addEventListener("submit", (e) => {
   e.preventDefault();
+  unlockAudio();
   $("lobby-error").textContent = "";
   connect(roomParam || "NEW");
 });
 
-$("start").addEventListener("click", () => send({ t: "start" }));
-$("rematch").addEventListener("click", () => send({ t: "rematch" }));
+$("start").addEventListener("click", () => {
+  unlockAudio();
+  send({ t: "start" });
+});
+$("rematch").addEventListener("click", () => {
+  unlockAudio();
+  send({ t: "rematch" });
+});
+
+const muteBtn = $<HTMLButtonElement>("mute");
+function renderMute() {
+  muteBtn.setAttribute("aria-pressed", String(isMuted()));
+  muteBtn.setAttribute("aria-label", isMuted() ? "Turn sound on" : "Turn sound off");
+  muteBtn.classList.toggle("off", isMuted());
+}
+muteBtn.addEventListener("click", () => {
+  unlockAudio();
+  setMuted(!isMuted());
+  renderMute();
+});
+renderMute();
 $("copy").addEventListener("click", async () => {
   const btn = $("copy");
   try {
