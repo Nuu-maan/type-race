@@ -3,27 +3,47 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0b0816" />
     <title>type race</title>
     <meta name="description" content="A two-player typing race. Type fast, drive fast." />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='9' width='26' height='14' rx='5' fill='%235b7fa6'/%3E%3Crect x='18' y='12' width='5' height='8' rx='2' fill='white' fill-opacity='.6'/%3E%3C/svg%3E" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%232de2ff'/%3E%3Cstop offset='1' stop-color='%23ff3df2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='%230b0816'/%3E%3Cpath d='M6 12h10M4 17h8M8 22h7' stroke='url(%23g)' stroke-width='2.4' stroke-linecap='round'/%3E%3Crect x='17' y='13' width='11' height='8' rx='3' fill='url(%23g)'/%3E%3C/svg%3E" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&display=swap"
     />
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <main class="wrap">
+    <a class="skip" href="#main">Skip to content</a>
+    <main id="main" class="wrap">
       <header class="bar">
-        <a class="brand" href="/">type race</a>
+        <a class="brand" href="/">
+          <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+            <defs>
+              <linearGradient id="mark-g" x1="0" x2="1"><stop offset="0" stop-color="#2de2ff" /><stop offset="1" stop-color="#ff3df2" /></linearGradient>
+            </defs>
+            <path d="M6 12h10M4 17h8M8 22h7" stroke="url(#mark-g)" stroke-width="2.4" stroke-linecap="round" />
+            <rect x="17" y="13" width="11" height="8" rx="3" fill="url(#mark-g)" />
+          </svg>
+          type race
+        </a>
         <span class="slash">/</span>
         <span id="crumb" class="crumb">race a friend by typing</span>
-        <button id="mute" class="icon-btn" type="button">
-          <svg class="on" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 7h2.5L9 4v10l-3.5-3H3z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 6.5a3.5 3.5 0 0 1 0 5M14 4.5a6.5 6.5 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          <svg class="off" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 7h2.5L9 4v10l-3.5-3H3z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m12 7 4 4m0-4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        </button>
+        <div class="bar-end">
+          <div id="me-chip" class="me-chip" hidden>
+            <span id="me-level" class="level">1</span>
+            <span class="me-meta">
+              <span id="me-name" class="me-name"></span>
+              <span class="xp-bar"><span id="me-xp" class="xp-fill"></span></span>
+            </span>
+          </div>
+          <button id="mute" class="icon-btn" type="button">
+            <svg class="on" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 7h2.5L9 4v10l-3.5-3H3z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="M12 6.5a3.5 3.5 0 0 1 0 5M14 4.5a6.5 6.5 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+            <svg class="off" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 7h2.5L9 4v10l-3.5-3H3z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m12 7 4 4m0-4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
+          </button>
+        </div>
       </header>
 
       <section id="lobby" class="screen">
@@ -41,51 +61,82 @@
           </div>
         </div>
 
-        <section class="how" aria-labelledby="how-title">
+        <section class="section" aria-labelledby="how-title">
           <h2 id="how-title">How it plays</h2>
           <ol class="steps">
-            <li>
-              <span class="step-n">1</span>
-              <h3>Open a room</h3>
-              <p>Pick a name and create a room. You're the host.</p>
-            </li>
-            <li>
-              <span class="step-n">2</span>
-              <h3>Send the link</h3>
-              <p>Your friend opens it on their own device. Start unlocks when they join.</p>
-            </li>
-            <li>
-              <span class="step-n">3</span>
-              <h3>Type to drive</h3>
-              <p>You both get the same words. Type faster, go faster.</p>
-            </li>
+            <li><span class="step-n">1</span><h3>Open a room</h3><p>Pick a name and create a room. You're the host.</p></li>
+            <li><span class="step-n">2</span><h3>Send the link</h3><p>Your friend opens it on their own device. Start unlocks when they join.</p></li>
+            <li><span class="step-n">3</span><h3>Type to drive</h3><p>You both get the same words. Type faster, go faster.</p></li>
           </ol>
           <div class="rules">
             <div class="rule">
-              <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 3.5a6.5 6.5 0 0 0-6.5 6.5c0 1.3.4 2.5 1 3.5h11a6.5 6.5 0 0 0-5.5-10z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m9 10.5 3-3" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
-              <div><h3>Speed is your WPM</h3><p>Measured over the last three seconds, with momentum, so bursts help but can't spike.</p></div>
+              <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 3.5a6.5 6.5 0 0 0-6.5 6.5c0 1.3.4 2.5 1 3.5h11a6.5 6.5 0 0 0-5.5-10z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m9 10.5 3-3" stroke="#0b0816" stroke-width="1.6" stroke-linecap="round" /></svg>
+              <div><h3>Speed is your WPM</h3><p>Measured over the last three seconds, with momentum.</p></div>
             </div>
             <div class="rule">
-              <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="2.5" width="13" height="13" rx="4" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m7 7 4 4m0-4-4 4" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
-              <div><h3>Mistakes cost acceleration</h3><p>Wrong letters show red and you keep going, but the car picks up speed slower for a moment.</p></div>
+              <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="2.5" width="13" height="13" rx="4" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m7 7 4 4m0-4-4 4" stroke="#0b0816" stroke-width="1.6" stroke-linecap="round" /></svg>
+              <div><h3>Mistakes cost acceleration</h3><p>Wrong letters show red and you keep going, but you pick up speed slower.</p></div>
             </div>
             <div class="rule">
-              <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9.5 2.5c.5 2.5 4 4.5 4 8.5a4.5 4.5 0 0 1-9 0c0-1.8.8-3 1.8-4 .2 1.3.9 2 1.7 2.2C7.6 7 8 4.6 9.5 2.5z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+              <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9.5 2.5c.5 2.5 4 4.5 4 8.5a4.5 4.5 0 0 1-9 0c0-1.8.8-3 1.8-4 .2 1.3.9 2 1.7 2.2C7.6 7 8 4.6 9.5 2.5z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
               <div><h3>Clean streaks give nitro</h3><p>Eight words in a row without a mistake fire a short boost.</p></div>
             </div>
+            <div class="rule">
+              <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2.5 11 6.6l4.5.6-3.3 3.1.8 4.5L9 12.7l-4 2.1.8-4.5-3.3-3.1 4.5-.6z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+              <div><h3>Level up your car</h3><p>Every race earns XP. New paints and bodies unlock as you level.</p></div>
+            </div>
           </div>
+        </section>
+
+        <section class="section" aria-labelledby="board-title">
+          <div class="section-head">
+            <h2 id="board-title">Leaderboard</h2>
+            <div class="seg" id="board-tabs" role="radiogroup" aria-label="Difficulty">
+              <span class="seg-thumb"></span>
+              <label><input type="radio" name="board" value="easy" />Easy</label>
+              <label><input type="radio" name="board" value="normal" checked />Normal</label>
+              <label><input type="radio" name="board" value="hard" />Hard</label>
+            </div>
+          </div>
+          <ol id="board" class="board" aria-live="polite"></ol>
         </section>
       </section>
 
       <section id="room" class="screen" hidden>
-        <div class="stage room-stage">
-          <div id="slots" class="slots"></div>
-          <div class="share">
-            <span id="link" class="link"></span>
-            <button id="copy" class="btn small" type="button">Copy link</button>
+        <div class="room-grid">
+          <div class="garage">
+            <canvas id="garage-canvas" class="garage-canvas" aria-label="your car, drag to turn"></canvas>
+            <div class="garage-controls">
+              <div class="garage-row">
+                <h3>Paint</h3>
+                <div id="paints" class="swatches" role="radiogroup" aria-label="Paint"></div>
+              </div>
+              <div class="garage-row">
+                <h3>Body</h3>
+                <div id="bodies" class="chips" role="radiogroup" aria-label="Body"></div>
+              </div>
+              <p id="garage-hint" class="hint"></p>
+            </div>
           </div>
-          <button id="start" class="btn primary start" type="button" disabled>Start</button>
-          <p id="room-hint" class="hint"></p>
+          <div class="room-panel">
+            <div id="slots" class="slots"></div>
+            <div class="panel-row">
+              <h3>Difficulty</h3>
+              <div class="seg" id="difficulty" role="radiogroup" aria-label="Difficulty">
+                <span class="seg-thumb"></span>
+                <label><input type="radio" name="difficulty" value="easy" />Easy</label>
+                <label><input type="radio" name="difficulty" value="normal" checked />Normal</label>
+                <label><input type="radio" name="difficulty" value="hard" />Hard</label>
+              </div>
+              <p id="difficulty-hint" class="hint"></p>
+            </div>
+            <div class="share">
+              <span id="link" class="link"></span>
+              <button id="copy" class="btn small" type="button"><span class="swap" data-label="Copy link">Copy link</span></button>
+            </div>
+            <button id="start" class="btn primary start" type="button" disabled>Start race</button>
+            <p id="room-hint" class="hint center"></p>
+          </div>
         </div>
       </section>
 
@@ -107,12 +158,21 @@
           <div id="words-inner" class="words-inner"></div>
           <div id="caret" class="caret"></div>
         </div>
+        <p class="hint keys">Backspace fixes a letter · Ctrl+Backspace clears the word</p>
         <input id="ghost" class="ghost" aria-label="type here" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" />
         <div id="finish" class="finish" hidden>
-          <div class="card">
+          <div class="card" role="dialog" aria-modal="true" aria-labelledby="finish-title">
             <h2 id="finish-title"></h2>
             <p id="finish-sub" class="hint"></p>
             <div id="finish-rows" class="rows"></div>
+            <div id="finish-xp" class="finish-xp" hidden>
+              <div class="xp-line">
+                <span class="level" id="finish-level">1</span>
+                <span class="xp-bar big"><span id="finish-xp-fill" class="xp-fill"></span></span>
+                <span id="finish-xp-gain" class="xp-gain">+0 XP</span>
+              </div>
+              <p id="finish-unlock" class="unlock" hidden></p>
+            </div>
             <button id="rematch" class="btn primary" type="button">Rematch</button>
           </div>
         </div>
