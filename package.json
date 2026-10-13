@@ -1,0 +1,16 @@
+{
+  "name": "type-race",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot server.ts",
+    "start": "NODE_ENV=production bun server.ts",
+    "share": "NODE_ENV=production bun share.ts",
+    "check": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^7.0.2"
+  }
+}

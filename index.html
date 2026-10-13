@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>type race</title>
+    <meta name="description" content="A two-player typing race. Type fast, drive fast." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='9' width='26' height='14' rx='5' fill='%235b7fa6'/%3E%3Crect x='18' y='12' width='5' height='8' rx='2' fill='white' fill-opacity='.6'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Public+Sans:wght@400;500;600&display=swap"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="bar">
+        <a class="brand" href="/">type race</a>
+        <span class="slash">/</span>
+        <span id="crumb" class="crumb">race a friend by typing</span>
+      </header>
+
+      <section id="lobby" class="screen">
+        <h1>Type fast, drive fast.</h1>
+        <p class="lede">Two players, the same words, one track. Mistakes make you skid, eight clean words in a row give you nitro.</p>
+        <form id="lobby-form" class="field">
+          <input id="name" placeholder="your name" maxlength="16" autocomplete="off" spellcheck="false" />
+          <button id="lobby-btn" class="btn primary" type="submit">Create room</button>
+        </form>
+        <p id="lobby-error" class="error" role="alert"></p>
+      </section>
+
+      <section id="room" class="screen" hidden>
+        <div class="stage room-stage">
+          <div id="slots" class="slots"></div>
+          <div class="share">
+            <span id="link" class="link"></span>
+            <button id="copy" class="btn small" type="button">Copy link</button>
+          </div>
+          <button id="start" class="btn primary start" type="button" disabled>Start</button>
+          <p id="room-hint" class="hint"></p>
+        </div>
+      </section>
+
+      <section id="race" class="screen" hidden>
+        <div class="stage track-stage">
+          <canvas id="track" aria-label="race track"></canvas>
+          <div id="countdown" class="countdown" aria-live="assertive"></div>
+        </div>
+        <div id="stats" class="stats"></div>
+        <div id="words" class="words" aria-label="words to type">
+          <div id="words-inner" class="words-inner"></div>
+          <div id="caret" class="caret"></div>
+        </div>
+        <input id="ghost" class="ghost" aria-label="type here" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" />
+        <div id="finish" class="finish" hidden>
+          <div class="card">
+            <h2 id="finish-title"></h2>
+            <p id="finish-sub" class="hint"></p>
+            <div id="finish-rows" class="rows"></div>
+            <button id="rematch" class="btn primary" type="button">Rematch</button>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="./client.ts"></script>
+  </body>
+</html>
