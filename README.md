@@ -95,7 +95,7 @@ Render's free tier sleeps after 15 minutes without traffic. The `Keep alive` wor
 gh variable set APP_URL --body https://<your-service>.onrender.com
 ```
 
-The free tier has no persistent disk, so profiles and the leaderboard reset whenever the service restarts or redeploys.
+Set `DATABASE_URL` on the service to a Postgres connection string (the pooled one from Neon works well) so profiles and the leaderboard survive restarts and redeploys. Without it the server uses a SQLite file inside the container, which resets on every deploy.
 
 ## Controls
 
@@ -109,7 +109,7 @@ The free tier has no persistent disk, so profiles and the leaderboard reset when
 
 ## Under the hood
 
-- **Server**: one Bun process. It serves the page, runs every room over WebSockets and keeps profiles in SQLite. It is the source of truth: clients send keys, and the server runs the race at 20 ticks a second and broadcasts every car.
+- **Server**: one Bun process. It serves the page, runs every room over WebSockets and keeps profiles in Postgres (or a SQLite file locally). It is the source of truth: clients send keys, and the server runs the race at 20 ticks a second and broadcasts every car.
 - **Client**: plain TypeScript and three.js, no framework. The car scene, garage and landing hero are WebGL, the rest is HTML and CSS.
 - **Shared logic**: `game.ts` holds the speed model and runs on both sides, so your own car reacts the moment you type.
 
@@ -119,14 +119,20 @@ The free tier has no persistent disk, so profiles and the leaderboard reset when
 | `server.ts` | Rooms, spectators, the race loop and the HTTP API. |
 | `words.ts` | Word lists and the seeded text generator for each difficulty. |
 | `progress.ts` | Levels, XP, paints, bodies and unlocks. |
-| `db.ts` | SQLite profiles, race history and the leaderboard. |
+| `db.ts` | Profiles, race history and the leaderboard, on Postgres or SQLite through `Bun.SQL`. |
 | `meta.ts` | Link preview tags per page (home, invites, watch links, live races), `robots.txt` and the sitemap. |
 | `scene.ts` | The WebGL track, cars, garage and effects. |
 | `client.ts` | Screens, typing, the room and race flow. |
 | `hud.ts`, `live.ts`, `garage.ts`, `leaderboard.ts` | The race HUD, live races list, garage pickers and leaderboard. |
 | `sound.ts` | Synthesized sound effects. |
 
-Profiles live in `data/type-race.sqlite` on the machine running the server, keyed by an id each browser keeps. Set `DB_PATH` to use another file and `PORT` to use another port.
+Profiles are keyed by an id each browser keeps. With `DATABASE_URL` set they live in that Postgres database; without it they live in `data/type-race.sqlite` (set `DB_PATH` to use another file). Set `PORT` to use another port.
+
+The project is linked to Neon. To work against your own copy of the data instead of production, create a branch and pull its connection string into `.env.local`, which Bun loads on its own:
+
+```sh
+neon checkout dev --create
+```
 
 ## Checks
 
