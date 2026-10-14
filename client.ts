@@ -392,7 +392,7 @@ function renderBanner(now: number) {
 
 function setResultsOpen(open: boolean) {
   $("finish").hidden = !open;
-  for (const node of [$("race").querySelector<HTMLElement>(".track-stage")!, wordsEl, $("keys-hint"), $("spectate-bar"), document.querySelector<HTMLElement>(".bar")!]) {
+  for (const node of [$("race").querySelector<HTMLElement>(".track-stage")!, wordsEl, $("race-tools"), $("spectate-bar"), document.querySelector<HTMLElement>(".bar")!]) {
     node.inert = open;
   }
 }
@@ -528,6 +528,25 @@ document.addEventListener("keydown", (e) => {
   if ((status === "racing" || status === "countdown") && document.activeElement !== ghost && e.key.length === 1) ghost.focus();
 });
 
+function refocus() {
+  if (role === "play" && view === "race" && (status === "racing" || status === "countdown")) ghost.focus();
+}
+
+let textSize = "m";
+try {
+  textSize = localStorage.getItem("textSize") ?? "m";
+} catch {}
+if (!["s", "m", "l"].includes(textSize)) textSize = "m";
+document.documentElement.dataset.textSize = textSize;
+bindSeg($("text-size"), (value) => {
+  document.documentElement.dataset.textSize = value;
+  try {
+    localStorage.setItem("textSize", value);
+  } catch {}
+  placeCaret();
+  refocus();
+})(textSize);
+
 let scene: ReturnType<typeof createScene> | null = null;
 let hudFrame = 0;
 
@@ -627,6 +646,7 @@ $("start").addEventListener("click", () => {
   unlockAudio();
   send({ t: "start" });
 });
+
 
 $("rematch").addEventListener("click", () => {
   unlockAudio();

@@ -190,7 +190,15 @@
           <div id="words-inner" class="words-inner"></div>
           <div id="caret" class="caret"></div>
         </div>
-        <p id="keys-hint" class="hint keys">Backspace fixes a letter · Ctrl+Backspace clears the word</p>
+        <div id="race-tools" class="race-tools">
+          <p id="keys-hint" class="hint keys">Backspace fixes a letter · Ctrl+Backspace clears the word</p>
+          <div class="seg compact text-size" id="text-size" role="radiogroup" aria-label="Text size">
+            <span class="seg-thumb"></span>
+            <label><input type="radio" name="text-size" value="s" aria-label="Small text" /><span class="aa s">A</span></label>
+            <label><input type="radio" name="text-size" value="m" aria-label="Medium text" checked /><span class="aa m">A</span></label>
+            <label><input type="radio" name="text-size" value="l" aria-label="Large text" /><span class="aa l">A</span></label>
+          </div>
+        </div>
         <div id="spectate-bar" class="spectate-bar" hidden>
           <span class="watch-chip"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 4C5.4 4 2.9 6.6 2 9c.9 2.4 3.4 5 7 5s6.1-2.6 7-5c-.9-2.4-3.4-5-7-5z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><circle cx="9" cy="9" r="2.2" fill="var(--color-bg-page)" /></svg>Spectating</span>
           <p id="spectate-follow" class="hint">Following the leader. Select a racer in the tower to follow them.</p>
