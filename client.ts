@@ -11,6 +11,7 @@ import {
   countSound,
   finishSound,
   isMuted,
+  joinSound,
   keySound,
   nitroSound,
   setMuted,
@@ -169,7 +170,7 @@ function connect(room: string, as: Role) {
     setResultsOpen(false);
     const reason = e.reason || (code ? "Connection to the room was lost. Open the link again to rejoin." : "Unable to reach the server. Check that it's running and try again.");
     if (as === "watch") goLive(reason);
-    else if (e.code === 4004 || e.code === 4003) goLobby(reason);
+    else if (e.code === 4004 || e.code === 4003 || e.code === 4008) goLobby(reason);
     else {
       show("lobby");
       $("lobby-error").textContent = reason;
@@ -205,6 +206,7 @@ function onRoom(msg: { code: string; host: string; status: Status; difficulty: D
   if (msg.status === "countdown" || msg.status === "racing") return;
   if (msg.status === "finished" && view === "race") return;
   const entering = view !== "room";
+  if (!entering && players.some((p) => p.id !== me && !shownSlots.has(p.id))) joinSound();
   status = msg.status;
   setResultsOpen(false);
   if (entering) show("room");
@@ -392,7 +394,7 @@ function renderBanner(now: number) {
 
 function setResultsOpen(open: boolean) {
   $("finish").hidden = !open;
-  for (const node of [$("race").querySelector<HTMLElement>(".track-stage")!, wordsEl, $("keys-hint"), $("spectate-bar"), document.querySelector<HTMLElement>(".bar")!]) {
+  for (const node of [$("race").querySelector<HTMLElement>(".track-stage")!, wordsEl, $("race-tools"), $("spectate-bar"), document.querySelector<HTMLElement>(".bar")!]) {
     node.inert = open;
   }
 }
@@ -528,6 +530,43 @@ document.addEventListener("keydown", (e) => {
   if ((status === "racing" || status === "countdown") && document.activeElement !== ghost && e.key.length === 1) ghost.focus();
 });
 
+function refocus() {
+  if (role === "play" && view === "race" && (status === "racing" || status === "countdown")) ghost.focus();
+}
+
+let textSize = "m";
+try {
+  textSize = localStorage.getItem("textSize") ?? "m";
+} catch {}
+if (!["s", "m", "l"].includes(textSize)) textSize = "m";
+document.documentElement.dataset.textSize = textSize;
+bindSeg($("text-size"), (value) => {
+  document.documentElement.dataset.textSize = value;
+  try {
+    localStorage.setItem("textSize", value);
+  } catch {}
+  placeCaret();
+  refocus();
+})(textSize);
+
+const fsButton = $("fullscreen");
+fsButton.hidden = !document.fullscreenEnabled;
+fsButton.setAttribute("aria-label", "Full screen");
+fsButton.addEventListener("click", () => {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(() => {});
+});
+document.addEventListener("fullscreenchange", () => {
+  const on = Boolean(document.fullscreenElement);
+  const label = on ? "Exit full screen" : "Full screen";
+  document.documentElement.classList.toggle("fs", on);
+  fsButton.setAttribute("aria-pressed", String(on));
+  fsButton.setAttribute("aria-label", label);
+  swapLabel(fsButton, label);
+  requestAnimationFrame(placeCaret);
+  refocus();
+});
+
 let scene: ReturnType<typeof createScene> | null = null;
 let hudFrame = 0;
 
@@ -627,6 +666,9 @@ $("start").addEventListener("click", () => {
   unlockAudio();
   send({ t: "start" });
 });
+
+$("leave-room").addEventListener("click", () => navigate("lobby"));
+$("to-menu").addEventListener("click", () => navigate("lobby"));
 
 $("rematch").addEventListener("click", () => {
   unlockAudio();

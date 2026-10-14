@@ -979,6 +979,10 @@ h3 {
   gap: 12px;
 }
 
+.panel-head .watch-chip {
+  margin-left: auto;
+}
+
 .panel-title {
   font-size: 17px;
 }
@@ -1413,7 +1417,7 @@ canvas {
   margin-top: 20px;
   overflow: hidden;
   color: var(--color-text-tertiary);
-  font: 25px/1.7 var(--mono);
+  font: var(--words-size, 25px)/1.7 var(--mono);
   cursor: text;
 }
 
@@ -1478,6 +1482,139 @@ canvas {
   50% {
     opacity: 0;
   }
+}
+
+:root[data-text-size="s"] {
+  --words-size: 20px;
+}
+
+:root[data-text-size="l"] {
+  --words-size: 31px;
+}
+
+.race-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.race-tools .keys {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+#race.spectating .text-size {
+  display: none;
+}
+
+.seg.compact {
+  padding: 3px;
+  border-radius: 11px;
+}
+
+.seg.compact .seg-thumb {
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / 3);
+  border-radius: 8px;
+}
+
+.seg.compact label {
+  min-width: 34px;
+  height: 26px;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.aa {
+  line-height: 1;
+}
+
+.aa.s {
+  font-size: 11px;
+}
+
+.aa.m {
+  font-size: 14px;
+}
+
+.aa.l {
+  font-size: 17px;
+}
+
+.fs-btn {
+  gap: 7px;
+}
+
+.fs-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.fs-btn path {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition-property: opacity, scale;
+  transition-duration: 0.2s;
+  transition-timing-function: var(--ease-out);
+}
+
+.fs-btn .exit,
+html.fs .fs-btn .enter {
+  opacity: 0;
+  scale: 0.6;
+}
+
+html.fs .fs-btn .exit {
+  opacity: 1;
+  scale: 1;
+}
+
+html.fs #race:not([hidden]) {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--color-bg-page);
+}
+
+html.fs #race .track-stage {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html.fs #race .words {
+  --panel: oklch(0.145 0.004 80 / 0.84);
+  position: absolute;
+  left: 50%;
+  bottom: 92px;
+  z-index: 2;
+  width: min(940px, calc(100% - 96px));
+  margin: 0;
+  translate: -50% 0;
+  border-radius: 4px;
+  background: var(--panel);
+  box-shadow: 0 0 0 20px var(--panel), 0 16px 40px 20px oklch(0 0 0 / 0.25);
+}
+
+html.fs #race .race-tools {
+  position: absolute;
+  top: 76px;
+  right: 24px;
+  z-index: 3;
+  margin: 0;
+}
+
+html.fs #race .keys,
+html.fs #race .spectate-bar {
+  display: none;
 }
 
 .spectate-bar {
@@ -1674,6 +1811,12 @@ canvas {
   from {
     opacity: 0;
   }
+}
+
+.finish-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
 }
 
 .card {
@@ -1883,8 +2026,17 @@ canvas {
   .seg label {
     min-width: 0;
   }
-  .words {
-    font-size: 19px;
+  :root {
+    --words-size: 19px;
+  }
+  :root[data-text-size="s"] {
+    --words-size: 16px;
+  }
+  :root[data-text-size="l"] {
+    --words-size: 23px;
+  }
+  .fs-btn .swap {
+    display: none;
   }
   .hud-chip > span {
     font-size: 20px;
