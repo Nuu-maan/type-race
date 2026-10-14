@@ -547,6 +547,24 @@ bindSeg($("text-size"), (value) => {
   refocus();
 })(textSize);
 
+const fsButton = $("fullscreen");
+fsButton.hidden = !document.fullscreenEnabled;
+fsButton.setAttribute("aria-label", "Full screen");
+fsButton.addEventListener("click", () => {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else document.documentElement.requestFullscreen().catch(() => {});
+});
+document.addEventListener("fullscreenchange", () => {
+  const on = Boolean(document.fullscreenElement);
+  const label = on ? "Exit full screen" : "Full screen";
+  document.documentElement.classList.toggle("fs", on);
+  fsButton.setAttribute("aria-pressed", String(on));
+  fsButton.setAttribute("aria-label", label);
+  swapLabel(fsButton, label);
+  requestAnimationFrame(placeCaret);
+  refocus();
+});
+
 let scene: ReturnType<typeof createScene> | null = null;
 let hudFrame = 0;
 

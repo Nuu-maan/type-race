@@ -198,6 +198,13 @@
             <label><input type="radio" name="text-size" value="m" aria-label="Medium text" checked /><span class="aa m">A</span></label>
             <label><input type="radio" name="text-size" value="l" aria-label="Large text" /><span class="aa l">A</span></label>
           </div>
+          <button id="fullscreen" class="btn small fs-btn" type="button" aria-pressed="false">
+            <svg viewBox="0 0 18 18" aria-hidden="true">
+              <path class="enter" d="M3 7V4.5C3 3.7 3.7 3 4.5 3H7M11 3h2.5c.8 0 1.5.7 1.5 1.5V7M15 11v2.5c0 .8-.7 1.5-1.5 1.5H11M7 15H4.5C3.7 15 3 14.3 3 13.5V11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+              <path class="exit" d="M7 3v2.5C7 6.3 6.3 7 5.5 7H3M15 7h-2.5C11.7 7 11 6.3 11 5.5V3M11 15v-2.5c0-.8.7-1.5 1.5-1.5H15M3 11h2.5c.8 0 1.5.7 1.5 1.5V15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span class="swap" data-label="Full screen">Full screen</span>
+          </button>
         </div>
         <div id="spectate-bar" class="spectate-bar" hidden>
           <span class="watch-chip"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 4C5.4 4 2.9 6.6 2 9c.9 2.4 3.4 5 7 5s6.1-2.6 7-5c-.9-2.4-3.4-5-7-5z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><circle cx="9" cy="9" r="2.2" fill="var(--color-bg-page)" /></svg>Spectating</span>
