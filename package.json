@@ -4,9 +4,9 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "bun --hot server.ts",
-    "start": "NODE_ENV=production bun server.ts",
-    "share": "NODE_ENV=production bun share.ts",
+    "dev": "bun --hot src/server/server.ts",
+    "start": "NODE_ENV=production bun src/server/server.ts",
+    "share": "NODE_ENV=production bun src/server/share.ts",
     "check": "tsc --noEmit",
     "test": "bun test"
   },

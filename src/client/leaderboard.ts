@@ -1,4 +1,4 @@
-import { DIFFICULTY, isDifficulty, paintById, type Difficulty } from "./progress";
+import { DIFFICULTY, isDifficulty, paintById, type Difficulty } from "../shared/progress";
 import { $, bindSeg, el } from "./ui";
 
 type Row = { name: string; level: number; paint: string; bestWpm: number; accuracy: number; races: number; wins: number };

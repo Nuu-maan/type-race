@@ -1,4 +1,4 @@
-import { BODIES, PAINTS, paintById, type Car } from "./progress";
+import { BODIES, PAINTS, paintById, type Car } from "../shared/progress";
 import { createGarage } from "./scene";
 import { $, el, replay } from "./ui";
 

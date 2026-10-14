@@ -1,4 +1,4 @@
-import { TRACK } from "./game";
+import { TRACK } from "../shared/game";
 import { METERS_PER_UNIT } from "./scene";
 import { $, el } from "./ui";
 

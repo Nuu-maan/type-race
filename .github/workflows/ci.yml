@@ -28,6 +28,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
       - run: bun test
-      - run: bun test db.test.ts
+      - run: bun test src/server/db.test.ts
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
