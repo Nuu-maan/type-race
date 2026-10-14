@@ -81,6 +81,18 @@ bun run share
 
 This starts the server and a Cloudflare quick tunnel and prints a public `https://….trycloudflare.com` link. Open it, create a room and send the room link to your friends. The link changes every time you run it and stops working when you press Ctrl+C.
 
+## Deploy on Railway
+
+Railway builds the `Dockerfile` and gives the server a public HTTPS address. Add a volume at `/data` so profiles and the leaderboard survive redeploys, and keep the service at one replica: rooms live in memory, so every racer has to reach the same process.
+
+```sh
+railway login
+railway init -n type-race
+railway up --detach
+railway volume add --mount-path /data
+railway domain
+```
+
 ## Controls
 
 | Key | What it does |
