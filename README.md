@@ -81,17 +81,19 @@ bun run share
 
 This starts the server and a Cloudflare quick tunnel and prints a public `https://….trycloudflare.com` link. Open it, create a room and send the room link to your friends. The link changes every time you run it and stops working when you press Ctrl+C.
 
-## Deploy on Railway
+## Deploy on Render
 
-Railway builds the `Dockerfile` and gives the server a public HTTPS address. Add a volume at `/data` so profiles and the leaderboard survive redeploys, and keep the service at one replica: rooms live in memory, so every racer has to reach the same process.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Nuu-maan/type-race)
+
+`render.yaml` sets up one free web service built from the `Dockerfile`. Rooms live in memory, so keep it at one instance.
+
+Render's free tier sleeps after 15 minutes without traffic. The `Keep alive` workflow pings the server every 10 minutes once you set the repo variable `APP_URL` to your Render address:
 
 ```sh
-railway login
-railway init -n type-race
-railway up --detach
-railway volume add --mount-path /data
-railway domain
+gh variable set APP_URL --body https://<your-service>.onrender.com
 ```
+
+The free tier has no persistent disk, so profiles and the leaderboard reset whenever the service restarts or redeploys.
 
 ## Controls
 
