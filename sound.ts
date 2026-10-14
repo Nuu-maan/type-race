@@ -106,6 +106,12 @@ export function countSound(go: boolean) {
   if (go) tone("sine", f * 1.5, 0.05, 0.35);
 }
 
+export function joinSound() {
+  tone("sine", 660, 0.06, 0.2);
+  tone("sine", 990, 0.05, 0.3, 0.09);
+  tone("triangle", 1980, 0.012, 0.2, 0.09);
+}
+
 export function nitroSound() {
   burst(350, 0.9, 0.1, 0.6, 2400);
   sweep("sine", 80, 240, 0.07, 0.45);

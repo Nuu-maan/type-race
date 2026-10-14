@@ -11,6 +11,7 @@ import {
   countSound,
   finishSound,
   isMuted,
+  joinSound,
   keySound,
   nitroSound,
   setMuted,
@@ -205,6 +206,7 @@ function onRoom(msg: { code: string; host: string; status: Status; difficulty: D
   if (msg.status === "countdown" || msg.status === "racing") return;
   if (msg.status === "finished" && view === "race") return;
   const entering = view !== "room";
+  if (!entering && players.some((p) => p.id !== me && !shownSlots.has(p.id))) joinSound();
   status = msg.status;
   setResultsOpen(false);
   if (entering) show("room");
