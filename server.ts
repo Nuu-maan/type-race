@@ -115,7 +115,7 @@ function award(room: Room, rows: ReturnType<typeof results>) {
         accuracy: row.accuracy,
         won: row.place === 1 && row.finished,
         xp: gained,
-      });
+      }).catch((error) => console.error("Could not save race:", error));
     }
     progress[row.id] = { gained, xp: member.data.xp, level: after, leveledUp: after > before, unlocked: unlockedBetween(before, after) };
   }
@@ -226,11 +226,16 @@ function watch(ws: Socket) {
   }
 }
 
-function changeCar(ws: Socket, room: Room, msg: { paint?: unknown; body?: unknown }) {
+async function changeCar(ws: Socket, room: Room, msg: { paint?: unknown; body?: unknown }) {
   if (room.status !== "lobby" && room.status !== "finished") return;
   const car = { paint: String(msg.paint), body: String(msg.body) } as Car;
-  const allowed = ws.data.pid ? setCar(ws.data.pid, car) : canUse(car, levelFromXp(ws.data.xp));
-  if (!allowed) return;
+  const allowed = ws.data.pid
+    ? await setCar(ws.data.pid, car).catch((error) => {
+        console.error("Could not save car:", error);
+        return canUse(car, levelFromXp(ws.data.xp));
+      })
+    : canUse(car, levelFromXp(ws.data.xp));
+  if (!allowed || !room.members.includes(ws)) return;
   ws.data.car = car;
   broadcast(room, roomInfo(room));
 }
@@ -285,14 +290,14 @@ export const server = Bun.serve({
     },
     "/robots.txt": (req) => new Response(robots(originOf(req))),
     "/sitemap.xml": (req) => new Response(sitemap(originOf(req)), { headers: { "content-type": "application/xml" } }),
-    "/api/leaderboard": (req) => {
+    "/api/leaderboard": async (req) => {
       const d = new URL(req.url).searchParams.get("d");
-      return Response.json(leaderboard(isDifficulty(d) ? d : "normal"));
+      return Response.json(await leaderboard(isDifficulty(d) ? d : "normal").catch(() => []));
     },
     "/api/live": () => Response.json(liveRooms()),
-    "/api/profile": (req) => {
+    "/api/profile": async (req) => {
       const id = new URL(req.url).searchParams.get("id") ?? "";
-      return Response.json(PLAYER_ID.test(id) ? getProfile(id) : null);
+      return Response.json(PLAYER_ID.test(id) ? await getProfile(id).catch(() => null) : null);
     },
   },
   fetch(req, server) {
@@ -343,12 +348,16 @@ export const server = Bun.serve({
       }
       const taken = new Set(room.members.map((m) => m.data.car.paint));
       const fallback = DEFAULT_CARS.find((c) => !taken.has(c.paint)) ?? DEFAULT_CARS[0]!;
+      ws.data.car = fallback;
       if (ws.data.pid) {
-        const profile = ensurePlayer(ws.data.pid, ws.data.name, fallback.paint);
-        ws.data.xp = profile.xp;
-        ws.data.car = profile.car;
-      } else {
-        ws.data.car = fallback;
+        ensurePlayer(ws.data.pid, ws.data.name, fallback.paint)
+          .then((profile) => {
+            if (!room.members.includes(ws)) return;
+            ws.data.xp = profile.xp;
+            ws.data.car = profile.car;
+            broadcast(room, roomInfo(room));
+          })
+          .catch((error) => console.error("Could not load profile:", error));
       }
       room.members.push(ws);
       room.active = Date.now();
@@ -370,7 +379,7 @@ export const server = Bun.serve({
       else if (msg.t === "difficulty" && room.host === ws.data.id && room.status === "lobby" && isDifficulty(msg.d)) {
         room.difficulty = msg.d;
         broadcast(room, roomInfo(room));
-      } else if (msg.t === "car") changeCar(ws, room, msg);
+      } else if (msg.t === "car") void changeCar(ws, room, msg);
       else if (msg.t === "rematch" && room.status === "finished") {
         room.status = "lobby";
         room.race = null;
