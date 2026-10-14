@@ -119,6 +119,7 @@ The free tier has no persistent disk, so profiles and the leaderboard reset when
 | `words.ts` | Word lists and the seeded text generator for each difficulty. |
 | `progress.ts` | Levels, XP, paints, bodies and unlocks. |
 | `db.ts` | SQLite profiles, race history and the leaderboard. |
+| `meta.ts` | Link preview tags per page (home, invites, watch links, live races), `robots.txt` and the sitemap. |
 | `scene.ts` | The WebGL track, cars, garage and effects. |
 | `client.ts` | Screens, typing, the room and race flow. |
 | `hud.ts`, `live.ts`, `garage.ts`, `leaderboard.ts` | The race HUD, live races list, garage pickers and leaderboard. |
