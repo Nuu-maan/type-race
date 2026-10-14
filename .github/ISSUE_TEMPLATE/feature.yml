@@ -1,0 +1,16 @@
+name: Idea
+description: Suggest a feature, a car, a track or a change.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What should change, and why it makes the race better.
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Sketches, references or examples.

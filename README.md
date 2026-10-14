@@ -7,6 +7,7 @@
 A multiplayer typing race where your words per minute are your car's speed.
 2 to 5 racers, the same words, one neon track.
 
+[![CI](https://img.shields.io/github/actions/workflow/status/Nuu-maan/type-race/ci.yml?branch=main&label=CI&style=flat-square&labelColor=1a1a1a&color=fbd530)](https://github.com/Nuu-maan/type-race/actions/workflows/ci.yml)
 [![MIT license](https://img.shields.io/badge/license-MIT-fbd530?style=flat-square&labelColor=1a1a1a)](LICENSE)
 [![Bun](https://img.shields.io/badge/runtime-Bun-fbd530?style=flat-square&labelColor=1a1a1a)](https://bun.sh)
 [![three.js](https://img.shields.io/badge/WebGL-three.js-fbd530?style=flat-square&labelColor=1a1a1a)](https://threejs.org)
