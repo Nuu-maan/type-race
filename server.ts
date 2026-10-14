@@ -20,6 +20,7 @@ const COUNTDOWN_MS = 3000;
 const TICK_MS = 50;
 const PLAYER_ID = /^[0-9a-f-]{36}$/;
 const MAX_SPECTATORS = 50;
+const ROOM_IDLE_MS = Number(process.env.ROOM_IDLE_MS ?? 10 * 60_000);
 
 type Status = "lobby" | "countdown" | "racing" | "finished";
 type Role = "play" | "watch";
@@ -36,6 +37,7 @@ type Room = {
   difficulty: Difficulty;
   race: Race | null;
   timer: Timer | null;
+  active: number;
 };
 
 const rooms = new Map<string, Room>();
@@ -233,6 +235,20 @@ function changeCar(ws: Socket, room: Room, msg: { paint?: unknown; body?: unknow
   broadcast(room, roomInfo(room));
 }
 
+function closeIdleRooms() {
+  const now = Date.now();
+  for (const room of rooms.values()) {
+    if (now - room.active < ROOM_IDLE_MS) continue;
+    stopTimer(room);
+    rooms.delete(room.code);
+    for (const ws of [...room.members, ...room.watchers]) {
+      ws.close(4008, "This room closed after 10 minutes without activity. Create a new one to race again.");
+    }
+  }
+}
+
+setInterval(closeIdleRooms, Math.min(30_000, ROOM_IDLE_MS));
+
 let shellHtml: Promise<string> | null = null;
 
 function shell() {
@@ -312,6 +328,7 @@ export const server = Bun.serve({
           difficulty: "normal",
           race: null,
           timer: null,
+          active: Date.now(),
         };
         rooms.set(room.code, room);
       }
@@ -334,6 +351,7 @@ export const server = Bun.serve({
         ws.data.car = fallback;
       }
       room.members.push(ws);
+      room.active = Date.now();
       ws.subscribe(room.code);
       send(ws, { t: "hello", you: ws.data.id });
       broadcast(room, roomInfo(room));
@@ -341,6 +359,7 @@ export const server = Bun.serve({
     message(ws: Socket, raw) {
       const room = rooms.get(ws.data.code);
       if (!room || ws.data.role === "watch") return;
+      room.active = Date.now();
       let msg: { t?: string; c?: unknown; w?: unknown; d?: unknown; paint?: unknown; body?: unknown };
       try {
         msg = JSON.parse(String(raw));

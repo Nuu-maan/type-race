@@ -170,7 +170,7 @@ function connect(room: string, as: Role) {
     setResultsOpen(false);
     const reason = e.reason || (code ? "Connection to the room was lost. Open the link again to rejoin." : "Unable to reach the server. Check that it's running and try again.");
     if (as === "watch") goLive(reason);
-    else if (e.code === 4004 || e.code === 4003) goLobby(reason);
+    else if (e.code === 4004 || e.code === 4003 || e.code === 4008) goLobby(reason);
     else {
       show("lobby");
       $("lobby-error").textContent = reason;
