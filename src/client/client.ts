@@ -1,11 +1,11 @@
-import { applyBackspace, applyKey, createPlayer, MARK_OK, TRACK, type Player } from "./game";
+import { applyBackspace, applyKey, createPlayer, MARK_OK, TRACK, type Player } from "../shared/game";
 import { renderGarage, startGarage, stopGarage } from "./garage";
 import { startHero, stopHero } from "./hero";
 import { ordinal, renderHud, renderWatchers, setHudPicker, standingsOf, type HudRacer } from "./hud";
 import { initLeaderboard, refreshLeaderboard } from "./leaderboard";
 import { initLive, showLive } from "./live";
 import { fetchProfile, playerId, renderMe } from "./profile";
-import { DIFFICULTY, isDifficulty, levelProgress, MAX_RACERS, MIN_RACERS, paintById, type Car, type Difficulty } from "./progress";
+import { DIFFICULTY, isDifficulty, levelProgress, MAX_RACERS, MIN_RACERS, paintById, type Car, type Difficulty } from "../shared/progress";
 import { createScene, METERS_PER_UNIT, type SceneCar } from "./scene";
 import {
   countSound,

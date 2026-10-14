@@ -4,4 +4,4 @@ docs
 .git
 .agents
 .claude
-*.test.ts
+**/*.test.ts

@@ -1,7 +1,7 @@
 import { SQL } from "bun";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { canUse, levelFromXp, type Car, type Difficulty } from "./progress";
+import { canUse, levelFromXp, type Car, type Difficulty } from "../shared/progress";
 
 function connect() {
   if (process.env.DATABASE_URL) return new SQL(process.env.DATABASE_URL, { prepare: false });

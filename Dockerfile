@@ -6,4 +6,4 @@ COPY . .
 RUN mkdir -p /data
 ENV NODE_ENV=production PORT=8080 DB_PATH=/data/type-race.sqlite
 EXPOSE 8080
-CMD ["bun", "server.ts"]
+CMD ["bun", "src/server/server.ts"]

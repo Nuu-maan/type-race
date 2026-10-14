@@ -1,4 +1,4 @@
-import { levelProgress, type Car } from "./progress";
+import { levelProgress, type Car } from "../shared/progress";
 import { $, replay } from "./ui";
 
 export type Profile = { id: string; name: string; xp: number; level: number; car: Car; races: number; wins: number; bestWpm: number };

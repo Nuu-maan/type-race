@@ -1,4 +1,4 @@
-import { DIFFICULTY, paintById, type Difficulty } from "./progress";
+import { DIFFICULTY, paintById, type Difficulty } from "../shared/progress";
 import { $, el } from "./ui";
 
 type LiveRacer = { name: string; paint: string; progress: number; place: number | null; left: boolean };

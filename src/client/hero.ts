@@ -1,4 +1,4 @@
-import { PAINTS } from "./progress";
+import { PAINTS } from "../shared/progress";
 import { createScene } from "./scene";
 import { $ } from "./ui";
 

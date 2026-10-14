@@ -1,8 +1,8 @@
 import type { ServerWebSocket } from "bun";
-import index from "./index.html";
+import index from "../client/index.html";
 import { ensurePlayer, getProfile, leaderboard, recordRace, setCar } from "./db";
 import { OG_IMAGES, originOf, pageFor, robots, sitemap, withHead } from "./meta";
-import { applyBackspace, applyKey, createRace, FINISH_GRACE_MS, raceOver, results, tick, TRACK, wpm, type Race } from "./game";
+import { applyBackspace, applyKey, createRace, FINISH_GRACE_MS, raceOver, results, tick, TRACK, wpm, type Race } from "../shared/game";
 import {
   canUse,
   DEFAULT_CARS,
@@ -14,7 +14,7 @@ import {
   unlockedBetween,
   type Car,
   type Difficulty,
-} from "./progress";
+} from "../shared/progress";
 
 const COUNTDOWN_MS = 3000;
 const TICK_MS = 50;
@@ -284,7 +284,7 @@ export const server = Bun.serve({
     },
     "/og/:name": (req) => {
       if (!OG_IMAGES.has(req.params.name)) return new Response("Not found", { status: 404 });
-      return new Response(Bun.file(`${import.meta.dir}/og/${req.params.name}`), {
+      return new Response(Bun.file(`${import.meta.dir}/../../public/og/${req.params.name}`), {
         headers: { "cache-control": "public, max-age=86400" },
       });
     },
