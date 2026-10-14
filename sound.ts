@@ -77,21 +77,47 @@ function burst(freq: number, q: number, peak: number, decay: number, sweepTo?: n
 }
 
 export function keySound(ok: boolean) {
-  if (ok) burst(2600 + Math.random() * 900, 1.2, 0.05, 0.025);
-  else tone("sine", 130, 0.08, 0.09);
+  if (!ctx) return;
+  if (ok) {
+    burst(3200 + Math.random() * 1400, 0.9, 0.035, 0.018);
+    tone("sine", 190 + Math.random() * 40, 0.05, 0.035);
+  } else {
+    tone("triangle", 120, 0.07, 0.12);
+    tone("sine", 96, 0.05, 0.16);
+  }
+}
+
+function sweep(type: OscillatorType, from: number, to: number, peak: number, duration: number) {
+  if (!ctx) return;
+  const start = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  osc.type = type;
+  osc.frequency.setValueAtTime(from, start);
+  osc.frequency.exponentialRampToValueAtTime(to, start + duration);
+  osc.connect(envelope(peak, 0.02, duration, start));
+  osc.start(start);
+  osc.stop(start + duration + 0.1);
 }
 
 export function countSound(go: boolean) {
-  tone("sine", go ? 1046 : 523, 0.12, go ? 0.35 : 0.14);
+  const f = go ? 1046 : 523;
+  tone("sine", f, 0.1, go ? 0.4 : 0.16);
+  tone("triangle", f * 2, 0.025, go ? 0.3 : 0.1);
+  if (go) tone("sine", f * 1.5, 0.05, 0.35);
 }
 
 export function nitroSound() {
-  burst(350, 0.9, 0.12, 0.6, 2400);
+  burst(350, 0.9, 0.1, 0.6, 2400);
+  sweep("sine", 80, 240, 0.07, 0.45);
 }
 
 export function finishSound(won: boolean) {
   const notes = won ? [523, 659, 784, 1046] : [392, 330, 262];
-  notes.forEach((f, i) => tone("triangle", f, 0.1, won ? 0.5 : 0.6, i * (won ? 0.09 : 0.14)));
+  notes.forEach((f, i) => {
+    const at = i * (won ? 0.09 : 0.14);
+    tone("triangle", f, 0.09, won ? 0.6 : 0.6, at);
+    tone("sine", f / 2, 0.04, 0.8, at);
+  });
 }
 
 function softClip(amount: number) {
