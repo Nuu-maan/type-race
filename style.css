@@ -979,6 +979,10 @@ h3 {
   gap: 12px;
 }
 
+.panel-head .watch-chip {
+  margin-left: auto;
+}
+
 .panel-title {
   font-size: 17px;
 }

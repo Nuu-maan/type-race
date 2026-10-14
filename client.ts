@@ -667,6 +667,7 @@ $("start").addEventListener("click", () => {
   send({ t: "start" });
 });
 
+$("leave-room").addEventListener("click", () => navigate("lobby"));
 
 $("rematch").addEventListener("click", () => {
   unlockAudio();
