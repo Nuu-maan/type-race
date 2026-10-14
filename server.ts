@@ -1,6 +1,7 @@
 import type { ServerWebSocket } from "bun";
 import index from "./index.html";
 import { ensurePlayer, getProfile, leaderboard, recordRace, setCar } from "./db";
+import { OG_IMAGES, originOf, pageFor, robots, sitemap, withHead } from "./meta";
 import { applyBackspace, applyKey, createRace, FINISH_GRACE_MS, raceOver, results, tick, TRACK, wpm, type Race } from "./game";
 import {
   canUse,
@@ -232,11 +233,42 @@ function changeCar(ws: Socket, room: Room, msg: { paint?: unknown; body?: unknow
   broadcast(room, roomInfo(room));
 }
 
+let shellHtml: Promise<string> | null = null;
+
+function shell() {
+  if (!shellHtml || process.env.NODE_ENV !== "production") {
+    shellHtml = fetch(`http://127.0.0.1:${server.port}/_shell`)
+      .then((res) => res.text())
+      .catch((error) => {
+        shellHtml = null;
+        throw error;
+      });
+  }
+  return shellHtml;
+}
+
+function hostName(code: string) {
+  const room = rooms.get(code);
+  return room?.members.find((m) => m.data.id === room.host)?.data.name;
+}
+
 export const server = Bun.serve({
   port: Number(process.env.PORT ?? 3000),
   development: process.env.NODE_ENV !== "production",
   routes: {
-    "/": index,
+    "/_shell": index,
+    "/": async (req) => {
+      const html = withHead(await shell(), pageFor(new URL(req.url), hostName), originOf(req));
+      return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+    },
+    "/og/:name": (req) => {
+      if (!OG_IMAGES.has(req.params.name)) return new Response("Not found", { status: 404 });
+      return new Response(Bun.file(`${import.meta.dir}/og/${req.params.name}`), {
+        headers: { "cache-control": "public, max-age=86400" },
+      });
+    },
+    "/robots.txt": (req) => new Response(robots(originOf(req))),
+    "/sitemap.xml": (req) => new Response(sitemap(originOf(req)), { headers: { "content-type": "application/xml" } }),
     "/api/leaderboard": (req) => {
       const d = new URL(req.url).searchParams.get("d");
       return Response.json(leaderboard(isDifficulty(d) ? d : "normal"));
