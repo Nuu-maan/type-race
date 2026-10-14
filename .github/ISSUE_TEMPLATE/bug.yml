@@ -1,0 +1,30 @@
+name: Bug report
+description: Something in the game doesn't work the way it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a room
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: Firefox 131 on Windows, Safari on iPhone 15
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or console output
+      description: Anything from the browser console helps a lot.
