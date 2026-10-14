@@ -35,12 +35,13 @@ A multiplayer typing race where your words per minute are your car's speed.
 | **Typing that drives** | Your speed comes from your rolling WPM over the last 3 seconds. The car has momentum: it builds speed as you type and coasts down when you stop. |
 | **Mistakes cost, they don't stop you** | Wrong letters show in red and the caret keeps going, like monkeytype. Each mistake slows your acceleration for a moment, and accuracy under 100% lowers your top speed. |
 | **Nitro** | Eight clean words in a row give you a short boost. |
-| **2 to 5 racers** | After the first car crosses the line, everyone else gets 15 seconds to finish. Podium places earn bonus XP. |
+| **2 to 5 racers** | After the first car crosses the line, everyone else gets 15 seconds to finish. Podium places earn bonus XP. Rooms close after 10 minutes without activity. |
 | **Spectating** | The Live races tab lists every race running. Watch from there or from a watch link, follow the leader or any racer you pick. |
 | **Levels and a garage** | XP from every race. New paints and the Muscle and Hyper bodies unlock as you level. |
 | **Difficulty** | Easy, Normal or Hard words. Mistakes cost more on harder races. |
 | **Leaderboard** | Best WPM per difficulty, right on the landing page. |
-| **Sound** | Quiet synthesized engine, key ticks and countdown beeps, with a mute button. |
+| **Full screen and text size** | Race full screen with the words floating over the track, and pick small, medium or large text. Your choice is remembered. |
+| **Sound** | A synthesized engine that climbs through the gears, key clicks, countdown, nitro and finish sounds, and a chime when someone joins your room. A mute button turns it all off. |
 
 <table>
   <tr>
