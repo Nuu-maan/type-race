@@ -11,11 +11,13 @@ const EYE =
 let timer = 0;
 let visible = false;
 let cards = new Map<string, HTMLLIElement>();
+let empty: HTMLLIElement | null = null;
 let onWatch: (code: string) => void = () => {};
 
 function card(room: LiveRoom, index: number) {
   const li = el("li", "live-card");
   li.style.setProperty("--n", String(index));
+  li.addEventListener("animationend", () => (li.style.animation = "none"), { once: true });
   li.innerHTML = `<div class="live-meta"><span class="status"></span><span class="live-code"></span></div><div class="live-racers"></div><div class="live-side"><span class="watch-chip" title="Spectators">${EYE}<span class="count"></span><span class="sr-only">watching</span></span><a class="btn small watch">Watch</a></div>`;
   li.querySelector<HTMLAnchorElement>(".watch")!.addEventListener("click", (e) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
@@ -56,15 +58,17 @@ function update(li: HTMLLIElement, room: LiveRoom) {
   });
 }
 
+function emptyState() {
+  if (!empty) {
+    empty = el("li", "live-empty");
+    empty.append(el("strong", "", "No races right now"), el("span", "", "Start one and share the watch link so others can follow along."));
+    empty.addEventListener("animationend", () => (empty!.style.animation = "none"), { once: true });
+  }
+  return empty;
+}
+
 function render(rooms: LiveRoom[]) {
   const list = $("live-list");
-  if (!rooms.length) {
-    cards = new Map();
-    const empty = el("li", "live-empty");
-    empty.append(el("strong", "", "No races right now"), el("span", "", "Start one and share the watch link so others can follow along."));
-    list.replaceChildren(empty);
-    return;
-  }
   const next = new Map<string, HTMLLIElement>();
   rooms.forEach((room, i) => {
     const li = cards.get(room.code) ?? card(room, i);
@@ -72,7 +76,8 @@ function render(rooms: LiveRoom[]) {
     next.set(room.code, li);
   });
   cards = next;
-  list.replaceChildren(...next.values());
+  const items = rooms.length ? [...next.values()] : [emptyState()];
+  if (items.length !== list.children.length || items.some((li, i) => list.children[i] !== li)) list.replaceChildren(...items);
 }
 
 function renderBadge(rooms: LiveRoom[]) {
