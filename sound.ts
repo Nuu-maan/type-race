@@ -2,7 +2,16 @@ let ctx: AudioContext | null = null;
 let master: GainNode;
 let noise: AudioBuffer;
 let muted = false;
-let engine: { osc: OscillatorNode[]; filter: BiquadFilterNode; gain: GainNode } | null = null;
+let engine: {
+  osc: OscillatorNode[];
+  pulse: OscillatorNode;
+  filter: BiquadFilterNode;
+  gain: GainNode;
+  road: AudioBufferSourceNode;
+  roadFilter: BiquadFilterNode;
+  roadGain: GainNode;
+  gear: number;
+} | null = null;
 
 try {
   muted = localStorage.getItem("muted") === "1";
@@ -85,38 +94,93 @@ export function finishSound(won: boolean) {
   notes.forEach((f, i) => tone("triangle", f, 0.1, won ? 0.5 : 0.6, i * (won ? 0.09 : 0.14)));
 }
 
+function softClip(amount: number) {
+  const curve = new Float32Array(1024);
+  for (let i = 0; i < curve.length; i++) {
+    const x = (i / (curve.length - 1)) * 2 - 1;
+    curve[i] = Math.tanh(amount * x) / Math.tanh(amount);
+  }
+  return curve;
+}
+
 export function startEngine() {
   if (!ctx || engine) return;
+  const t = ctx.currentTime;
+  const shaper = ctx.createWaveShaper();
+  shaper.curve = softClip(2.2);
+  shaper.oversample = "2x";
+  const throb = ctx.createGain();
+  throb.gain.value = 0.75;
   const filter = ctx.createBiquadFilter();
   filter.type = "lowpass";
-  filter.frequency.value = 300;
+  filter.frequency.value = 320;
+  filter.Q.value = 0.9;
   const gain = ctx.createGain();
   gain.gain.value = 0;
-  const osc = (["sawtooth", "square"] as const).map((type) => {
+  const osc = (
+    [
+      ["sawtooth", 0.5],
+      ["sawtooth", 0.35],
+      ["square", 0.3],
+    ] as const
+  ).map(([type, level]) => {
     const o = ctx!.createOscillator();
     o.type = type;
-    o.connect(filter);
-    o.start();
+    const g = ctx!.createGain();
+    g.gain.value = level;
+    o.connect(g).connect(shaper);
+    o.start(t);
     return o;
   });
-  filter.connect(gain).connect(master);
-  engine = { osc, filter, gain };
+  osc[1]!.detune.value = 9;
+  const pulse = ctx.createOscillator();
+  const depth = ctx.createGain();
+  depth.gain.value = 0.25;
+  pulse.connect(depth).connect(throb.gain);
+  pulse.start(t);
+  shaper.connect(throb).connect(filter).connect(gain).connect(master);
+
+  const road = ctx.createBufferSource();
+  road.buffer = noise;
+  road.loop = true;
+  const roadFilter = ctx.createBiquadFilter();
+  roadFilter.type = "bandpass";
+  roadFilter.Q.value = 0.6;
+  roadFilter.frequency.value = 500;
+  const roadGain = ctx.createGain();
+  roadGain.gain.value = 0;
+  road.connect(roadFilter).connect(roadGain).connect(master);
+  road.start(t);
+  engine = { osc, pulse, filter, gain, road, roadFilter, roadGain, gear: 0 };
 }
+
+const GEARS = 5;
 
 export function updateEngine(speedFraction: number, nitro: boolean) {
   if (!ctx || !engine) return;
   const t = ctx.currentTime;
-  const f = 42 + 120 * speedFraction + (nitro ? 18 : 0);
-  engine.osc[0]!.frequency.setTargetAtTime(f, t, 0.08);
-  engine.osc[1]!.frequency.setTargetAtTime(f * 0.5, t, 0.08);
-  engine.filter.frequency.setTargetAtTime(260 + 1400 * speedFraction, t, 0.1);
-  engine.gain.gain.setTargetAtTime(0.018 + 0.03 * speedFraction, t, 0.15);
+  const shift = speedFraction * GEARS;
+  if (shift > engine.gear + 1 && engine.gear < GEARS - 1) engine.gear++;
+  else if (shift < engine.gear - 0.2) engine.gear--;
+  const rpm = Math.min(1, Math.max(0, shift - engine.gear)) * 0.7 + 0.3;
+  const f = 34 + 70 * rpm + 6 * engine.gear + (nitro ? 14 : 0);
+  engine.osc[0]!.frequency.setTargetAtTime(f, t, 0.06);
+  engine.osc[1]!.frequency.setTargetAtTime(f, t, 0.06);
+  engine.osc[2]!.frequency.setTargetAtTime(f * 0.5, t, 0.06);
+  engine.pulse.frequency.setTargetAtTime(f * 0.25, t, 0.06);
+  engine.filter.frequency.setTargetAtTime(260 + 900 * rpm + 500 * speedFraction + (nitro ? 400 : 0), t, 0.08);
+  engine.gain.gain.setTargetAtTime(0.02 + 0.03 * speedFraction + (nitro ? 0.01 : 0), t, 0.15);
+  engine.roadFilter.frequency.setTargetAtTime(400 + 1800 * speedFraction, t, 0.2);
+  engine.roadGain.gain.setTargetAtTime(0.003 + 0.022 * speedFraction * speedFraction, t, 0.2);
 }
 
 export function stopEngine() {
   if (!ctx || !engine) return;
   const e = engine;
   engine = null;
-  e.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.3);
-  for (const o of e.osc) o.stop(ctx.currentTime + 1.5);
+  const t = ctx.currentTime;
+  e.gain.gain.setTargetAtTime(0, t, 0.3);
+  e.roadGain.gain.setTargetAtTime(0, t, 0.3);
+  for (const o of [...e.osc, e.pulse]) o.stop(t + 1.5);
+  e.road.stop(t + 1.5);
 }
