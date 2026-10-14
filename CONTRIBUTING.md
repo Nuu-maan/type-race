@@ -39,7 +39,7 @@ Open http://localhost:3000 and open the room link in a second tab to race agains
 ### Code
 
 - `bun run check` and `bun test` must pass.
-- Changes to the speed model or typing rules in `game.ts` come with a test in `game.test.ts`.
+- Changes to the speed model or typing rules in `src/shared/game.ts` come with a test in `src/shared/game.test.ts`.
 - The server decides the race. Don't move race results, speed or places into the client.
 - Match the code around you. Clear names and small functions over comments; add a comment only when leaving it out would let someone break something by accident.
 - No new dependencies without talking about it in an issue first.
@@ -47,7 +47,7 @@ Open http://localhost:3000 and open the room link in a second tab to race agains
 
 ### Design
 
-- The whole site wears the night-race theme. Reuse the color tokens in `style.css` instead of adding new colors.
+- The whole site wears the night-race theme. Reuse the color tokens in `src/client/style.css` instead of adding new colors.
 - No gradients on buttons, the logo, badges or bars. The 3D scene has its own art direction.
 - Every control gets press feedback and respects `prefers-reduced-motion`.
 - Text has to stay readable: check contrast when you change a color.

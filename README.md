@@ -111,20 +111,18 @@ Set `DATABASE_URL` on the service to a Postgres connection string (the pooled on
 
 - **Server**: one Bun process. It serves the page, runs every room over WebSockets and keeps profiles in Postgres (or a SQLite file locally). It is the source of truth: clients send keys, and the server runs the race at 20 ticks a second and broadcasts every car.
 - **Client**: plain TypeScript and three.js, no framework. The car scene, garage and landing hero are WebGL, the rest is HTML and CSS.
-- **Shared logic**: `game.ts` holds the speed model and runs on both sides, so your own car reacts the moment you type.
 
-| File | What it holds |
-| --- | --- |
-| `game.ts` | Speed model, typing rules, places and race end. Tuning constants sit at the top. |
-| `server.ts` | Rooms, spectators, the race loop and the HTTP API. |
-| `words.ts` | Word lists and the seeded text generator for each difficulty. |
-| `progress.ts` | Levels, XP, paints, bodies and unlocks. |
-| `db.ts` | Profiles, race history and the leaderboard, on Postgres or SQLite through `Bun.SQL`. |
-| `meta.ts` | Link preview tags per page (home, invites, watch links, live races), `robots.txt` and the sitemap. |
-| `scene.ts` | The WebGL track, cars, garage and effects. |
-| `client.ts` | Screens, typing, the room and race flow. |
-| `hud.ts`, `live.ts`, `garage.ts`, `leaderboard.ts` | The race HUD, live races list, garage pickers and leaderboard. |
-| `sound.ts` | Synthesized sound effects. |
+```
+src/
+  shared/     game.ts (speed model, typing rules, places), words.ts, progress.ts (levels, XP, cars)
+  server/     server.ts (rooms, race loop, API), db.ts, meta.ts (link previews, robots, sitemap), share.ts
+  client/     index.html, style.css, client.ts (screens and race flow), scene.ts (WebGL track, cars, garage),
+              hud.ts, live.ts, garage.ts, leaderboard.ts, hero.ts, profile.ts, sound.ts, ui.ts
+public/og/    link preview images
+docs/         README screenshots
+```
+
+`shared` runs on both sides, so your own car reacts the moment you type while the server stays the referee. Tuning constants for the race sit at the top of `src/shared/game.ts`. Tests live next to the code they cover.
 
 Profiles are keyed by an id each browser keeps. With `DATABASE_URL` set they live in that Postgres database; without it they live in `data/type-race.sqlite` (set `DB_PATH` to use another file). Set `PORT` to use another port.
 
