@@ -1813,6 +1813,12 @@ html.fs #race .spectate-bar {
   }
 }
 
+.finish-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
 .card {
   display: flex;
   flex-direction: column;
