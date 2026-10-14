@@ -81,6 +81,19 @@ bun run share
 
 This starts the server and a Cloudflare quick tunnel and prints a public `https://….trycloudflare.com` link. Open it, create a room and send the room link to your friends. The link changes every time you run it and stops working when you press Ctrl+C.
 
+## Deploy on Fly.io
+
+The repo ships a `Dockerfile` and `fly.toml`. The game runs as one machine with a small volume for SQLite, because rooms live in memory and every racer in a room has to reach the same process.
+
+```sh
+fly apps create <your-app-name>
+fly volumes create type_race_data --region bom --size 1 -a <your-app-name>
+fly deploy -a <your-app-name>
+fly scale count 1 -a <your-app-name>
+```
+
+Change `bom` (Mumbai) in `fly.toml` and the volume command to the region closest to your players. The machine stops when nobody is connected and starts again on the next visit; profiles and the leaderboard stay on the volume.
+
 ## Controls
 
 | Key | What it does |
