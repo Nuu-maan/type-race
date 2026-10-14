@@ -11,6 +11,7 @@ export const METERS_PER_UNIT = 2;
 
 export type SceneCar = {
   pos: number;
+  body: string;
   speed: number;
   slip: boolean;
   nitro: boolean;
@@ -18,8 +19,14 @@ export type SceneCar = {
   color: string;
 };
 
-const LANE_X = [-2.4, 2.4];
-const ROAD_W = 11;
+const LANE_W = 2.6;
+const LANE_X = [-2, -1, 0, 1, 2].map((k) => k * LANE_W);
+const LANE_SETS: Record<number, number[]> = { 1: [2], 2: [1, 3], 3: [1, 2, 3], 4: [0, 1, 3, 4], 5: [0, 1, 2, 3, 4] };
+const ROAD_W = LANE_W * 5 + 1.6;
+
+export function laneX(index: number, count: number) {
+  return LANE_X[LANE_SETS[count]?.[index] ?? 2]!;
+}
 const ROAD_LEN = 760;
 const FOG_NEAR = 80;
 const FOG_FAR = 620;
@@ -62,9 +69,13 @@ function roadTexture() {
       g.fillStyle = grad;
       g.fillRect(mx(lane - 1.4), 0, mx(lane + 1.4) - mx(lane - 1.4), 1024);
     }
+    const line = 0.15 * (512 / ROAD_W);
     g.fillStyle = "#e9e6f0";
-    for (const edge of [-ROAD_W / 2 + 0.35, ROAD_W / 2 - 0.5]) g.fillRect(mx(edge), 0, 0.15 * (512 / ROAD_W), 1024);
-    for (let k = 0; k < 4; k++) g.fillRect(mx(-0.08), k * 6 * pxPerM, 0.16 * (512 / ROAD_W), 3 * pxPerM);
+    for (const edge of [-ROAD_W / 2 + 0.35, ROAD_W / 2 - 0.5]) g.fillRect(mx(edge), 0, line, 1024);
+    g.fillStyle = "rgba(233,230,240,0.7)";
+    for (const divider of [-1.5, -0.5, 0.5, 1.5]) {
+      for (let k = 0; k < 4; k++) g.fillRect(mx(divider * LANE_W) - line / 2, k * 6 * pxPerM, line, 3 * pxPerM);
+    }
   });
 }
 
@@ -231,7 +242,77 @@ function repeater(spacing: number, count: number, build: (z: number, group: THRE
   return { group, spacing };
 }
 
-function makeCar(color: string) {
+type BodySpec = {
+  chassis: [number, number, number];
+  nose: [number, number, number, number];
+  cabin: [number, number, number, number, number];
+  roof: boolean;
+  wing: "low" | "tall" | "lip";
+  stripes: number[];
+  scoop: boolean;
+  fins: boolean;
+};
+
+const BODY_SPECS: Record<string, BodySpec> = {
+  gt: { chassis: [2.0, 0.55, 0.55], nose: [1.9, 0.3, 0.4, -2.05], cabin: [1.55, 0.5, 2.1, 0.98, 0.25], roof: true, wing: "low", stripes: [0], scoop: false, fins: false },
+  muscle: { chassis: [2.15, 0.68, 0.6], nose: [2.05, 0.42, 0.5, -2.05], cabin: [1.6, 0.48, 1.8, 1.1, 0.55], roof: true, wing: "lip", stripes: [-0.22, 0.22], scoop: true, fins: false },
+  hyper: { chassis: [2.05, 0.42, 0.45], nose: [1.95, 0.2, 0.3, -2.0], cabin: [1.35, 0.4, 1.7, 0.82, 0.05], roof: false, wing: "tall", stripes: [0], scoop: false, fins: true },
+};
+
+function buildShell(body: THREE.Group, spec: BodySpec, paint: THREE.Material, glass: THREE.Material, dark: THREE.Material) {
+  const [cw, ch, cy] = spec.chassis;
+  const chassis = new THREE.Mesh(new RoundedBoxGeometry(cw, ch, 4.5, 4, Math.min(0.2, ch / 2.5)), paint);
+  chassis.position.y = cy;
+  const [nw, nh, ny, nz] = spec.nose;
+  const nose = new THREE.Mesh(new RoundedBoxGeometry(nw, nh, 1.2, 4, Math.min(0.14, nh / 2.5)), paint);
+  nose.position.set(0, ny, nz);
+  const [kw, kh, kl, ky, kz] = spec.cabin;
+  const cabin = new THREE.Mesh(new RoundedBoxGeometry(kw, kh, kl, 4, 0.2), glass);
+  cabin.position.set(0, ky, kz);
+  body.add(chassis, nose, cabin);
+  const top = cy + ch / 2;
+  if (spec.roof) {
+    const roof = new THREE.Mesh(new RoundedBoxGeometry(kw - 0.15, 0.08, kl * 0.62, 2, 0.04), paint);
+    roof.position.set(0, ky + kh / 2, kz + 0.1);
+    body.add(roof);
+  }
+  if (spec.wing === "lip") {
+    const lip = new THREE.Mesh(new RoundedBoxGeometry(cw - 0.15, 0.1, 0.32, 2, 0.04), paint);
+    lip.position.set(0, top + 0.04, 2.08);
+    body.add(lip);
+  } else {
+    const tall = spec.wing === "tall";
+    const wing = new THREE.Mesh(new RoundedBoxGeometry(tall ? 2.3 : 2.1, 0.07, tall ? 0.6 : 0.45, 2, 0.03), dark);
+    const height = tall ? 0.75 : 0.35;
+    wing.position.set(0, top + height + 0.1, 2.05);
+    body.add(wing);
+    for (const x of [-0.6, 0.6]) {
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.06, height, 0.16), dark);
+      strut.position.set(x, top + height / 2 + 0.1, 2.0);
+      body.add(strut);
+    }
+  }
+  const stripeMat = new THREE.MeshStandardMaterial({ color: "#f5f5f5", roughness: 0.4 });
+  for (const x of spec.stripes) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(spec.stripes.length > 1 ? 0.2 : 0.34, 0.01, 4.4), stripeMat);
+    stripe.position.set(x, top + 0.005, 0);
+    body.add(stripe);
+  }
+  if (spec.scoop) {
+    const scoop = new THREE.Mesh(new RoundedBoxGeometry(0.6, 0.18, 0.8, 2, 0.06), dark);
+    scoop.position.set(0, top + 0.08, -1.1);
+    body.add(scoop);
+  }
+  if (spec.fins) {
+    for (const side of [-1, 1]) {
+      const fin = new THREE.Mesh(new RoundedBoxGeometry(0.08, 0.32, 1.3, 2, 0.03), paint);
+      fin.position.set(side * (cw / 2 - 0.04), top + 0.14, 1.4);
+      body.add(fin);
+    }
+  }
+}
+
+function makeCar(color: string, bodyId: string) {
   const car = new THREE.Group();
   const body = new THREE.Group();
   car.add(body);
@@ -245,26 +326,7 @@ function makeCar(color: string) {
   const rimGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.34, 6);
   rimGeo.rotateZ(Math.PI / 2);
 
-  const chassis = new THREE.Mesh(new RoundedBoxGeometry(2.0, 0.55, 4.5, 4, 0.2), paint);
-  chassis.position.y = 0.55;
-  const nose = new THREE.Mesh(new RoundedBoxGeometry(1.9, 0.3, 1.2, 4, 0.14), paint);
-  nose.position.set(0, 0.4, -2.05);
-  const cabin = new THREE.Mesh(new RoundedBoxGeometry(1.55, 0.5, 2.1, 4, 0.22), glass);
-  cabin.position.set(0, 0.98, 0.25);
-  const roof = new THREE.Mesh(new RoundedBoxGeometry(1.4, 0.08, 1.3, 2, 0.04), paint);
-  roof.position.set(0, 1.24, 0.35);
-  const wing = new THREE.Mesh(new RoundedBoxGeometry(2.1, 0.07, 0.45, 2, 0.03), dark);
-  wing.position.set(0, 1.18, 2.05);
-  body.add(chassis, nose, cabin, roof, wing);
-  for (const x of [-0.6, 0.6]) {
-    const strut = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.35, 0.16), dark);
-    strut.position.set(x, 0.98, 2.0);
-    body.add(strut);
-  }
-
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.01, 4.4), new THREE.MeshStandardMaterial({ color: "#f5f5f5", roughness: 0.4 }));
-  stripe.position.set(0, 0.83, 0);
-  body.add(stripe);
+  buildShell(body, BODY_SPECS[bodyId] ?? BODY_SPECS.gt!, paint, glass, dark);
 
   const head = new THREE.MeshBasicMaterial({ color: hdr("#e8f2ff", 1.6) });
   for (const x of [-0.65, 0.65]) {
@@ -351,10 +413,10 @@ function makeCar(color: string) {
     flames.push(flame);
   }
 
-  return { car, body, wheels, tail, glow, flames, prevSpeed: 0, accel: 0 };
+  return { car, body, wheels, tail, glow, beam, flames, prevSpeed: 0, accel: 0 };
 }
 
-type Car = ReturnType<typeof makeCar> & { label: THREE.Sprite | null; labelText: string };
+type Car = ReturnType<typeof makeCar> & { label: THREE.Sprite | null; labelText: string; key: string };
 
 export function createScene(canvas: HTMLCanvasElement) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
@@ -433,7 +495,7 @@ export function createScene(canvas: HTMLCanvasElement) {
   });
   const poolGeo = new THREE.PlaneGeometry(9, 9);
   repeaters.push(
-    repeater(36, Math.ceil(FOG_FAR / 36), (z, g) => {
+    repeater(40, Math.ceil(FOG_FAR / 40), (z, g) => {
       for (const side of [-1, 1]) {
         const x = side * (ROAD_W / 2 + 3.2);
         const pole = new THREE.Mesh(poleGeo, postMat);
@@ -506,11 +568,15 @@ export function createScene(canvas: HTMLCanvasElement) {
 
   const cars: Car[] = [];
   function ensureCars(list: SceneCar[]) {
-    while (cars.length < list.length) {
-      const c = makeCar(list[cars.length]!.color);
+    list.forEach((spec, i) => {
+      const key = `${spec.color}/${spec.body}`;
+      if (cars[i]?.key === key) return;
+      cars[i]?.car.removeFromParent();
+      const c = makeCar(spec.color, spec.body);
       scene.add(c.car);
-      cars.push({ ...c, label: null, labelText: "" });
-    }
+      cars[i] = { ...c, label: null, labelText: "", key };
+    });
+    for (const extra of cars.splice(list.length)) extra.car.removeFromParent();
   }
 
   const SPEED_LINES = 90;
@@ -585,7 +651,8 @@ export function createScene(canvas: HTMLCanvasElement) {
     list.forEach((c, i) => {
       const car = cars[i]!;
       const z = -(c.pos - me.pos) * METERS_PER_UNIT;
-      car.car.position.set(LANE_X[i] ?? 0, 0, z);
+      const x = laneX(i, list.length);
+      car.car.position.set(x, 0, z);
       const speed = c.speed * METERS_PER_UNIT;
       const accel = dt ? (speed - car.prevSpeed) / dt : 0;
       car.prevSpeed = speed;
@@ -602,11 +669,11 @@ export function createScene(canvas: HTMLCanvasElement) {
         f.scale.set(1, 0.7 + Math.random() * 0.6, 1);
       }
       if (c.slip && Math.random() < 0.7) {
-        for (const x of [-0.9, 0.9]) {
+        for (const side of [-0.9, 0.9]) {
           const p = smoke[smokeIndex++ % smoke.length]!;
           p.life = 1;
           p.s.visible = true;
-          p.s.position.set((LANE_X[i] ?? 0) + x, 0.35, z + 1.6);
+          p.s.position.set(car.car.position.x + side, 0.35, z + 1.6);
           p.s.scale.setScalar(0.45);
         }
       }
@@ -639,7 +706,7 @@ export function createScene(canvas: HTMLCanvasElement) {
     });
     lineGeo.attributes.position!.needsUpdate = true;
 
-    const laneX = LANE_X[meIndex] ?? 0;
+    const myLane = laneX(meIndex, list.length);
     const targetFov = 58 + 24 * fast + (me.nitro ? 8 : 0);
     fov += (targetFov - fov) * Math.min(1, dt * 3);
     camera.fov = fov;
@@ -647,11 +714,11 @@ export function createScene(canvas: HTMLCanvasElement) {
     const shake = (0.02 + (me.nitro ? 0.05 : 0)) * fast * fast;
     const narrow = THREE.MathUtils.clamp(1.4 - camera.aspect, 0, 0.8);
     camera.position.set(
-      laneX * 0.55 * (1 - narrow) + (Math.random() - 0.5) * shake,
+      myLane * 0.55 * (1 - narrow) + (Math.random() - 0.5) * shake,
       2.5 + narrow * 1.6 + (Math.random() - 0.5) * shake,
       7.2 + narrow * 7 - fast * 0.8,
     );
-    camera.lookAt(laneX * 0.35 * (1 - narrow), 0.9, -16);
+    camera.lookAt(myLane * 0.35 * (1 - narrow), 0.9, -16);
     sky.position.copy(camera.position);
 
     composer.render(dt);
@@ -659,4 +726,144 @@ export function createScene(canvas: HTMLCanvasElement) {
 
   resize();
   return { render, resize };
+}
+
+export function createGarage(canvas: HTMLCanvasElement) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environmentIntensity = 0.5;
+  scene.add(new THREE.HemisphereLight("#8f74e0", "#140b1e", 1.2));
+  const key = new THREE.DirectionalLight("#ffffff", 1.6);
+  key.position.set(4, 6, 5);
+  const rimL = new THREE.PointLight("#2de2ff", 30, 12);
+  rimL.position.set(-4, 1.5, -2);
+  const rimR = new THREE.PointLight("#ff3df2", 30, 12);
+  rimR.position.set(4, 1.5, -3);
+  scene.add(key, rimL, rimR);
+
+  const floor = new THREE.Mesh(
+    new THREE.CircleGeometry(4.2, 64),
+    new THREE.MeshBasicMaterial({ map: radialTexture("rgba(120,80,200,0.35)", "rgba(0,0,0,0)"), transparent: true, depthWrite: false }),
+  );
+  floor.rotation.x = -Math.PI / 2;
+  const ring = new THREE.Mesh(new THREE.RingGeometry(3.3, 3.36, 96), new THREE.MeshBasicMaterial({ color: hdr("#ff3df2", 1.2), transparent: true, opacity: 0.8 }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.01;
+  scene.add(floor, ring);
+
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+  camera.position.set(6.4, 2.8, 7.4);
+  camera.lookAt(0, 0.55, 0);
+
+  let current: ReturnType<typeof makeCar> | null = null;
+  let currentKey = "";
+  let angle = -0.6;
+  let spin = 0.35;
+  let velocity = spin;
+  let dragging = false;
+  let lastX = 0;
+  let frame = 0;
+  let running = false;
+  let visible = true;
+
+  function setCar(color: string, body: string) {
+    const nextKey = `${color}/${body}`;
+    if (nextKey === currentKey) return;
+    currentKey = nextKey;
+    current?.car.removeFromParent();
+    current = makeCar(color, body);
+    current.beam.visible = false;
+    (current.glow.material as THREE.MeshBasicMaterial).opacity = 0.9;
+    scene.add(current.car);
+    current.car.scale.setScalar(0.92);
+    current.car.userData.pop = 1;
+    if (running) loop();
+  }
+
+  function resize() {
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (!w || !h) return;
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    const back = camera.aspect < 1.2 ? 1.3 : 1;
+    camera.position.set(6.4 * back, 2.8 * back, 7.4 * back);
+    camera.lookAt(0, 0.55, 0);
+    camera.updateProjectionMatrix();
+    draw(0);
+  }
+
+  function draw(dt: number) {
+    if (!dragging) {
+      angle += velocity * dt;
+      velocity += (spin - velocity) * Math.min(1, dt * 1.5);
+    }
+    if (current) {
+      current.car.rotation.y = angle;
+      const pop = current.car.userData.pop as number;
+      if (pop > 0) {
+        current.car.userData.pop = Math.max(0, pop - dt * 3);
+        current.car.scale.setScalar(1 - 0.08 * (current.car.userData.pop as number) ** 2);
+      }
+    }
+    renderer.render(scene, camera);
+  }
+
+  let last = 0;
+  function loop() {
+    cancelAnimationFrame(frame);
+    last = performance.now();
+    const step = (now: number) => {
+      draw(Math.min(0.1, (now - last) / 1000));
+      last = now;
+      if (running && visible) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    lastX = e.clientX;
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX;
+    lastX = e.clientX;
+    angle += dx * 0.012;
+    velocity = dx * 0.6;
+  });
+  canvas.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    angle += e.key === "ArrowLeft" ? -0.35 : 0.35;
+    velocity = 0;
+    if (!running) draw(0);
+  });
+  const release = () => (dragging = false);
+  canvas.addEventListener("pointerup", release);
+  canvas.addEventListener("pointercancel", release);
+
+  new IntersectionObserver(([entry]) => {
+    visible = entry?.isIntersecting ?? true;
+    if (visible && running) loop();
+  }).observe(canvas);
+  new ResizeObserver(resize).observe(canvas);
+
+  return {
+    setCar,
+    start() {
+      running = true;
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) spin = velocity = 0;
+      loop();
+    },
+    stop() {
+      running = false;
+      cancelAnimationFrame(frame);
+    },
+  };
 }
