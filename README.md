@@ -89,11 +89,7 @@ This starts the server and a Cloudflare quick tunnel and prints a public `https:
 
 `render.yaml` sets up one free web service built from the `Dockerfile`. Rooms live in memory, so keep it at one instance.
 
-Render's free tier sleeps after 15 minutes without traffic. The `Keep alive` workflow pings the server every 10 minutes once you set the repo variable `APP_URL` to your Render address:
-
-```sh
-gh variable set APP_URL --body https://<your-service>.onrender.com
-```
+Render's free tier sleeps after 15 minutes without traffic. On Render the server requests its own public address (`RENDER_EXTERNAL_URL`, which Render sets) every 10 minutes, so it stays awake. One service running all month fits in the free tier's monthly hours.
 
 Set `DATABASE_URL` on the service to a Postgres connection string (the pooled one from Neon works well) so profiles and the leaderboard survive restarts and redeploys. Without it the server uses a SQLite file inside the container, which resets on every deploy.
 
