@@ -254,6 +254,10 @@ function closeIdleRooms() {
 
 setInterval(closeIdleRooms, Math.min(30_000, ROOM_IDLE_MS));
 
+if (process.env.RENDER_EXTERNAL_URL) {
+  setInterval(() => fetch(`${process.env.RENDER_EXTERNAL_URL}/api/live`).catch(() => {}), 10 * 60_000);
+}
+
 let shellHtml: Promise<string> | null = null;
 
 function shell() {
