@@ -48,6 +48,7 @@ async function migrate() {
     wpm INTEGER NOT NULL,
     accuracy INTEGER NOT NULL,
     duration_ms INTEGER NOT NULL,
+    finished INTEGER NOT NULL DEFAULT 1,
     won INTEGER NOT NULL,
     xp INTEGER NOT NULL,
     first_key_ms INTEGER,
@@ -112,6 +113,7 @@ export type HistoryEntry = {
   wpm: number;
   accuracy: number;
   durationMs: number;
+  finished: boolean;
   won: boolean;
   xp: number;
   challengeKey: string | null;
@@ -180,7 +182,7 @@ export async function getProfile(id: string): Promise<Profile | null> {
     )
     SELECT mode, difficulty, wpm, accuracy, duration_ms, at FROM ranked WHERE rank = 1 ORDER BY wpm DESC`;
   const historyRows = await db`
-    SELECT id, mode, difficulty, wpm, accuracy, duration_ms, won, xp, challenge_key, at
+    SELECT id, mode, difficulty, wpm, accuracy, duration_ms, finished, won, xp, challenge_key, at
     FROM attempts WHERE player_id = ${id} ORDER BY at DESC LIMIT 12`;
   const today = dayKey();
   const todayAt = Date.parse(`${today}T00:00:00.000Z`);
@@ -226,6 +228,7 @@ export async function getProfile(id: string): Promise<Profile | null> {
       wpm: entry.wpm,
       accuracy: entry.accuracy,
       durationMs: entry.duration_ms,
+      finished: Boolean(entry.finished),
       won: Boolean(entry.won),
       xp: entry.xp,
       challengeKey: entry.challenge_key,
@@ -276,6 +279,7 @@ export type AttemptEntry = {
   wpm: number;
   accuracy: number;
   durationMs: number;
+  finished?: boolean;
   won: boolean;
   xp: number;
   firstKeyMs?: number | null;
@@ -285,9 +289,9 @@ export type AttemptEntry = {
 
 async function insertAttempt(tx: SQL, entry: AttemptEntry, at: number) {
   const [inserted] = await tx`
-    INSERT INTO attempts (run_id, player_id, mode, difficulty, seed, challenge_key, wpm, accuracy, duration_ms, won, xp, first_key_ms, trace, text, at)
+    INSERT INTO attempts (run_id, player_id, mode, difficulty, seed, challenge_key, wpm, accuracy, duration_ms, finished, won, xp, first_key_ms, trace, text, at)
     VALUES (${entry.runId ?? crypto.randomUUID()}, ${entry.player}, ${entry.mode}, ${entry.difficulty}, ${entry.seed}, ${entry.challengeKey ?? null},
-      ${entry.wpm}, ${entry.accuracy}, ${entry.durationMs}, ${entry.won ? 1 : 0}, ${entry.xp}, ${entry.firstKeyMs ?? null},
+      ${entry.wpm}, ${entry.accuracy}, ${entry.durationMs}, ${entry.finished === false ? 0 : 1}, ${entry.won ? 1 : 0}, ${entry.xp}, ${entry.firstKeyMs ?? null},
       ${entry.trace ? JSON.stringify(entry.trace) : null}, ${entry.text ?? null}, ${at})
     ON CONFLICT (run_id) DO NOTHING RETURNING id`;
   return Boolean(inserted);
@@ -301,9 +305,9 @@ async function playerXp(tx: SQL, player: string) {
 export async function recordAttempt(entry: AttemptEntry) {
   await ready;
   return db.begin(async (tx) => {
-    if (!(await insertAttempt(tx, entry, Date.now()))) return playerXp(tx, entry.player);
+    if (!(await insertAttempt(tx, entry, Date.now()))) return { xp: await playerXp(tx, entry.player), awarded: 0 };
     const [player] = await tx`UPDATE players SET xp = xp + ${entry.xp} WHERE id = ${entry.player} RETURNING xp`;
-    return player.xp as number;
+    return { xp: player.xp as number, awarded: entry.xp };
   });
 }
 
@@ -314,13 +318,13 @@ export async function recordRace(
   return db.begin(async (tx) => {
     const at = Date.now();
     if (!(await insertAttempt(tx, { ...entry, mode: entry.mode ?? "multiplayer", seed: entry.seed ?? 0, durationMs: entry.durationMs ?? 0 }, at))) {
-      return playerXp(tx, entry.player);
+      return { xp: await playerXp(tx, entry.player), awarded: 0 };
     }
     await tx`
       INSERT INTO races (player_id, difficulty, wpm, accuracy, won, xp, at)
       VALUES (${entry.player}, ${entry.difficulty}, ${entry.wpm}, ${entry.accuracy}, ${entry.won ? 1 : 0}, ${entry.xp}, ${at})`;
     const [player] = await tx`UPDATE players SET xp = xp + ${entry.xp} WHERE id = ${entry.player} RETURNING xp`;
-    return player.xp as number;
+    return { xp: player.xp as number, awarded: entry.xp };
   });
 }
 
@@ -339,12 +343,12 @@ export async function bestGhost(player: string) {
   await ready;
   const [row] = await db`
     SELECT seed, difficulty, wpm, accuracy, duration_ms, trace, text FROM attempts
-    WHERE player_id = ${player} AND trace IS NOT NULL AND text IS NOT NULL
+    WHERE player_id = ${player} AND finished = 1 AND trace IS NOT NULL AND text IS NOT NULL
     ORDER BY wpm DESC, accuracy DESC, at DESC LIMIT 1`;
   if (!row) return null;
   try {
     const trace = JSON.parse(row.trace);
-    if (!Array.isArray(trace) || trace.length < 2) return null;
+    if (!Array.isArray(trace) || trace.length < 2 || !Array.isArray(trace.at(-1)) || Number(trace.at(-1)[1]) < 999) return null;
     return {
       seed: Number(row.seed),
       difficulty: row.difficulty as Difficulty,
@@ -361,10 +365,9 @@ export async function bestGhost(player: string) {
 
 type CompetitionRow = { id: string; name: string; xp: number; paint: string; score: number; wpm: number; accuracy: number; days?: number };
 
-function competitionRows(rows: CompetitionRow[]) {
+function competitionRows(rows: CompetitionRow[], player?: string) {
   return rows.map((row, index) => ({
     rank: index + 1,
-    id: row.id,
     name: row.name,
     level: levelFromXp(row.xp),
     paint: row.paint,
@@ -372,6 +375,7 @@ function competitionRows(rows: CompetitionRow[]) {
     wpm: row.wpm,
     accuracy: row.accuracy,
     days: row.days ?? 1,
+    isYou: row.id === player,
   }));
 }
 
@@ -404,11 +408,11 @@ export async function competitions(player?: string) {
     GROUP BY p.id, p.name, p.xp, p.paint
     ORDER BY score DESC, days DESC, wpm DESC
     LIMIT 20`;
-  const dailyEntries = competitionRows(daily);
-  const weeklyEntries = competitionRows(weekly);
+  const dailyEntries = competitionRows(daily, player);
+  const weeklyEntries = competitionRows(weekly, player);
   return {
-    daily: { key: today, participants: dailyEntries.length, entries: dailyEntries, you: dailyEntries.find((row) => row.id === player) ?? null },
-    weekly: { key: monday, entries: weeklyEntries, you: weeklyEntries.find((row) => row.id === player) ?? null },
+    daily: { key: today, participants: dailyEntries.length, entries: dailyEntries, you: dailyEntries.find((row) => row.isYou) ?? null },
+    weekly: { key: monday, entries: weeklyEntries, you: weeklyEntries.find((row) => row.isYou) ?? null },
   };
 }
 

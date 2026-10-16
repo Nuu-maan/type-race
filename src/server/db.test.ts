@@ -56,8 +56,8 @@ test("race writes return authoritative xp", async () => {
     won: true,
     xp: 30,
   });
-  expect(first).toBe(60);
-  expect(second).toBe(90);
+  expect(first).toEqual({ xp: 60, awarded: 60 });
+  expect(second).toEqual({ xp: 90, awarded: 30 });
 });
 
 test("retrying the same race does not add XP twice", async () => {
@@ -71,9 +71,28 @@ test("retrying the same race does not add XP twice", async () => {
     won: true,
     xp: 60,
   };
-  expect(await recordRace(attempt)).toBe(60);
-  expect(await recordRace(attempt)).toBe(60);
+  expect(await recordRace(attempt)).toEqual({ xp: 60, awarded: 60 });
+  expect(await recordRace(attempt)).toEqual({ xp: 60, awarded: 0 });
   expect((await getProfile("retry"))!.races).toBe(1);
+});
+
+test("unfinished traces cannot become personal ghosts", async () => {
+  await ensurePlayer("unfinished", "Unfinished", "cobalt");
+  await recordAttempt({
+    player: "unfinished",
+    mode: "practice",
+    difficulty: "normal",
+    seed: 1,
+    wpm: 100,
+    accuracy: 100,
+    durationMs: 30_000,
+    finished: false,
+    won: false,
+    xp: 10,
+    trace: [[0, 0], [30_000, 700]],
+    text: "unfinished text",
+  });
+  expect(await bestGhost("unfinished")).toBeNull();
 });
 
 test("locked cars are refused", async () => {
