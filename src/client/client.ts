@@ -613,8 +613,8 @@ function onFinish(winner: string | null, forfeit: boolean, results: Result[], pr
         el("span", "place", ordinal(r.place)),
         swatch,
         el("strong", "", r.id === me ? `${r.name} (you)` : r.name),
-        el("span", "", `${r.wpm} wpm`),
-        el("span", "", `${r.accuracy}%`),
+        el("span", "wpm", `${r.wpm} wpm`),
+        el("span", "accuracy", `${r.accuracy}%`),
         el("span", "time", outcome),
       );
       return row;

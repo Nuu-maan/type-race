@@ -2554,6 +2554,31 @@ html.fs #race .spectate-bar {
   .tabs a {
     padding-inline: 7px;
   }
+  .row {
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    gap: 4px 6px;
+    padding-inline: 6px;
+  }
+  .row .swatch {
+    display: none;
+  }
+  .row .wpm,
+  .row .accuracy,
+  .row .time {
+    white-space: nowrap;
+  }
+  .row .place {
+    grid-row: 1 / span 2;
+  }
+  .row .wpm {
+    grid-area: 1 / 3;
+  }
+  .row .accuracy {
+    grid-area: 2 / 2;
+  }
+  .row .time {
+    grid-area: 2 / 3;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
