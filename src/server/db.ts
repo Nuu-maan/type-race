@@ -191,7 +191,7 @@ export async function getProfile(id: string): Promise<Profile | null> {
   const [todayStats] = await db`
     SELECT MAX(wpm) AS best, MAX(accuracy) AS accuracy,
       CAST(COALESCE(SUM(CASE WHEN challenge_key = ${today} THEN 1 ELSE 0 END), 0) AS INTEGER) AS daily
-    FROM attempts WHERE player_id = ${id} AND at >= ${todayAt}`;
+    FROM attempts WHERE player_id = ${id} AND at >= ${todayAt} AND finished = 1`;
   const challengeRows = await db`
     SELECT DISTINCT challenge_key FROM attempts
     WHERE player_id = ${id} AND mode = 'daily' AND challenge_key IS NOT NULL
