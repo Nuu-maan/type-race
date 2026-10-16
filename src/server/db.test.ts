@@ -124,7 +124,7 @@ test("unfinished races stay in history without rewards or records", async () => 
   expect(await recordAttempt(attempt)).toEqual({ xp: 0, awarded: 0 });
   expect(await recordRace({ ...attempt, mode: "multiplayer" })).toEqual({ xp: 0, awarded: 0 });
   const profile = await getProfile("unrewarded");
-  expect(profile).toMatchObject({ xp: 0, bestWpm: 0, averageAccuracy: 0, records: [] });
+  expect(profile).toMatchObject({ xp: 0, bestWpm: 0, averageAccuracy: 0, practiceRaces: 0, records: [] });
   expect(profile!.history.map((race) => race.xp)).toEqual([0, 0]);
   expect((await leaderboard("normal")).some((row) => row.name === "Still racing")).toBe(false);
 });

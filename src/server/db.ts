@@ -170,7 +170,7 @@ export async function getProfile(id: string): Promise<Profile | null> {
   const [modeStats] = await db`
     SELECT CAST(COALESCE(SUM(CASE WHEN mode IN ('practice', 'ghost') THEN 1 ELSE 0 END), 0) AS INTEGER) AS practice,
       CAST(COALESCE(SUM(CASE WHEN mode = 'daily' THEN 1 ELSE 0 END), 0) AS INTEGER) AS daily
-    FROM attempts WHERE player_id = ${id}`;
+    FROM attempts WHERE player_id = ${id} AND finished = 1`;
   const recordRows = await db`
     WITH results AS (
       SELECT 'multiplayer' AS mode, difficulty, wpm, accuracy, 0 AS duration_ms, at
