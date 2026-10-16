@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { canUse, levelFromXp, levelProgress, placeBonus, raceXp, unlockedBetween, xpForLevel } from "./progress";
+import { canUse, effortXp, levelFromXp, levelProgress, placeBonus, raceXp, unlockedBetween, xpForLevel } from "./progress";
 
 test("levels follow the xp curve", () => {
   expect(levelFromXp(0)).toBe(1);
@@ -13,6 +13,7 @@ test("harder races and better places earn more xp", () => {
   expect(raceXp(60, 100, "hard", 2, 2)).toBeGreaterThan(raceXp(60, 100, "normal", 2, 2));
   expect(raceXp(60, 100, "normal", 1, 2) - raceXp(60, 100, "normal", 2, 2)).toBe(50);
   expect(raceXp(60, 50, "normal", 2, 2)).toBeLessThan(raceXp(60, 100, "normal", 2, 2));
+  expect(effortXp(60, 100, "normal")).toBe(70);
 });
 
 test("place bonuses reward the podium but never last place", () => {
