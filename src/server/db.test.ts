@@ -98,6 +98,7 @@ test("race records require an existing player", async () => {
 test("attempts build history, goals, ghost data and competitions", async () => {
   await ensurePlayer("d", "Daily", "lime");
   await logEvent({ player: "d", session: "session-d", name: "first_keystroke", elapsedMs: 4200 });
+  await logEvent({ player: "d", session: "session-d", name: "first_keystroke", elapsedMs: 100 });
   await recordAttempt({
     player: "d",
     mode: "daily",

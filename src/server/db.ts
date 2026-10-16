@@ -67,6 +67,7 @@ async function migrate() {
     at BIGINT NOT NULL
   )`);
   await db.unsafe("CREATE INDEX IF NOT EXISTS events_by_player ON events (player_id, at)");
+  await db.unsafe("CREATE UNIQUE INDEX IF NOT EXISTS one_activation_event ON events (session_id, name) WHERE name IN ('landing', 'first_keystroke')");
   await db.unsafe(`CREATE TABLE IF NOT EXISTS challenges (
     key TEXT PRIMARY KEY,
     seed BIGINT NOT NULL,
@@ -330,7 +331,8 @@ export async function logEvent(entry: { player: string | null; session: string; 
   await ready;
   await db`
     INSERT INTO events (player_id, session_id, name, elapsed_ms, detail, at)
-    VALUES (${entry.player}, ${entry.session}, ${entry.name}, ${entry.elapsedMs ?? null}, ${entry.detail ?? null}, ${Date.now()})`;
+    VALUES (${entry.player}, ${entry.session}, ${entry.name}, ${entry.elapsedMs ?? null}, ${entry.detail ?? null}, ${Date.now()})
+    ON CONFLICT DO NOTHING`;
 }
 
 export async function bestGhost(player: string) {
