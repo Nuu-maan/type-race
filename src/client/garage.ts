@@ -1,21 +1,30 @@
 import { BODIES, PAINTS, paintById, type Car } from "../shared/progress";
-import { createGarage } from "./scene";
 import { $, el, replay } from "./ui";
 
 type Item = { id: string; label: string; level: number };
 
-let preview: ReturnType<typeof createGarage> | null = null;
+type GaragePreview = { setCar: (color: string, body: string) => void; start: () => void; dispose: () => void };
+
+let preview: GaragePreview | null = null;
+let loading: Promise<void> | null = null;
+let active = false;
 let level = 1;
 let car: Car = { paint: "cobalt", body: "gt" };
 let onPick: (car: Car) => void = () => {};
 
 function getPreview() {
-  if (!preview) {
-    try {
-      preview = createGarage($<HTMLCanvasElement>("garage-canvas"));
-    } catch {
-      return null;
-    }
+  if (!preview && !loading) {
+    loading = import("./scene")
+      .then(({ createGarage }) => {
+        if (!active) return;
+        preview = createGarage($<HTMLCanvasElement>("garage-canvas"));
+        preview.setCar(paintById(car.paint)!.color, car.body);
+        preview.start();
+      })
+      .catch(() => {})
+      .finally(() => {
+        loading = null;
+      });
   }
   return preview;
 }
@@ -78,10 +87,12 @@ export function renderGarage(nextLevel: number, nextCar: Car, pick: (car: Car) =
 }
 
 export function startGarage() {
+  active = true;
   getPreview()?.start();
 }
 
 export function stopGarage() {
+  active = false;
   preview?.dispose();
   preview = null;
 }

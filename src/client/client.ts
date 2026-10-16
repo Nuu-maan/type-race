@@ -1,4 +1,4 @@
-import { applyBackspace, applyKey, createPlayer, MARK_OK, TRACK, type Player } from "../shared/game";
+import { applyBackspace, applyKey, createPlayer, MARK_OK, METERS_PER_UNIT, TRACK, type Player } from "../shared/game";
 import { isRaceMode, type RaceMode } from "../shared/challenge";
 import { renderDashboard, type Competitions, type RecordEntry } from "./dashboard";
 import { renderGarage, startGarage, stopGarage } from "./garage";
@@ -8,7 +8,6 @@ import { initLeaderboard, refreshLeaderboard } from "./leaderboard";
 import { initLive, showLive } from "./live";
 import { fetchProfile, playerId, renderMe, type Profile } from "./profile";
 import { DIFFICULTY, isDifficulty, levelProgress, MAX_RACERS, MIN_RACERS, paintById, type Car, type Difficulty } from "../shared/progress";
-import { createScene, METERS_PER_UNIT, type SceneCar } from "./scene";
 import {
   countSound,
   finishSound,
@@ -29,6 +28,7 @@ type Status = "lobby" | "countdown" | "racing" | "finished";
 type Role = "play" | "watch";
 type View = "lobby" | "live" | "profile" | "room" | "race";
 type CarState = { id: string; pos: number; speed: number; wpm: number; slip: boolean; nitro: boolean; place: number | null; left: boolean };
+type SceneCar = { pos: number; body: string; speed: number; slip: boolean; nitro: boolean; name: string; color: string };
 type Result = { id: string; name: string; place: number; finished: boolean; left: boolean; wpm: number; accuracy: number; time: number; pos: number };
 type Progress = { gained: number; xp: number; level: number; leveledUp: boolean; unlocked: string[]; saved: boolean };
 
@@ -41,7 +41,6 @@ const caret = $("caret");
 const canvas = $<HTMLCanvasElement>("track");
 const countdownEl = $("countdown");
 const MARK_CLASS = ["", "done", "wrong", "missed"];
-
 let ws: WebSocket | null = null;
 let role: Role = "play";
 let view: View = "lobby";
@@ -120,6 +119,7 @@ function show(next: View) {
   }
   if (next === "lobby") startHero();
   else stopHero();
+  if (next !== "race") disposeRaceScene();
   if (next === "room" && role === "play") startGarage();
   else stopGarage();
   showLive(next === "live");
@@ -773,19 +773,37 @@ document.addEventListener("fullscreenchange", () => {
   refocus();
 });
 
-let scene: ReturnType<typeof createScene> | null = null;
+type RaceScene = { render: (dt: number, cars: SceneCar[], meIndex: number) => void; resize: () => void; dispose: () => void };
+
+let scene: RaceScene | null = null;
+let sceneLoading: Promise<void> | null = null;
+let sceneObserver: ResizeObserver | null = null;
 let hudFrame = 0;
 
 function getScene() {
-  if (!scene) {
-    try {
-      scene = createScene(canvas);
-      new ResizeObserver(() => scene?.resize()).observe(canvas);
-    } catch {
-      countdownEl.textContent = "This race needs WebGL.";
-    }
+  if (!scene && !sceneLoading) {
+    sceneLoading = import("./scene")
+      .then(({ createScene }) => {
+        if (view !== "race") return;
+        scene = createScene(canvas);
+        sceneObserver = new ResizeObserver(() => scene?.resize());
+        sceneObserver.observe(canvas);
+      })
+      .catch(() => {
+        countdownEl.textContent = "This race needs WebGL.";
+      })
+      .finally(() => {
+        sceneLoading = null;
+      });
   }
   return scene;
+}
+
+function disposeRaceScene() {
+  sceneObserver?.disconnect();
+  sceneObserver = null;
+  scene?.dispose();
+  scene = null;
 }
 
 window.addEventListener("resize", placeCaret);

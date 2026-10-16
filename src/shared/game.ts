@@ -2,6 +2,7 @@ import { DIFFICULTY, type Difficulty } from "./progress";
 import { generateText } from "./words";
 
 export const TRACK = 1000;
+export const METERS_PER_UNIT = 2;
 export const UNITS_PER_WPM = TRACK / 3600;
 export const WPM_WINDOW_MS = 3000;
 export const MAX_WPM = 200;
