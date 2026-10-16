@@ -12,18 +12,28 @@ let visible = true;
 let active = false;
 let distance = 0;
 let time = 0;
+let resizeObserver: ResizeObserver | null = null;
 
-new IntersectionObserver(([entry]) => {
+const intersectionObserver = new IntersectionObserver(([entry]) => {
   visible = entry?.isIntersecting ?? true;
   if (visible && active) run();
-}).observe(canvas);
+  else cancelAnimationFrame(frame);
+});
+intersectionObserver.observe(canvas);
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) cancelAnimationFrame(frame);
+  else if (visible && active) run();
+});
 
 function run() {
   cancelAnimationFrame(frame);
+  if (!active || !visible || document.hidden) return;
   if (!scene) {
     try {
       scene = createScene(canvas);
-      new ResizeObserver(() => scene?.resize()).observe(canvas);
+      resizeObserver = new ResizeObserver(() => scene?.resize());
+      resizeObserver.observe(canvas);
     } catch {
       return;
     }
@@ -44,7 +54,7 @@ function run() {
       ],
       1,
     );
-    if (!still && visible && active) frame = requestAnimationFrame(loop);
+    if (!still && visible && active && !document.hidden) frame = requestAnimationFrame(loop);
   };
   frame = requestAnimationFrame(loop);
 }
@@ -57,4 +67,8 @@ export function startHero() {
 export function stopHero() {
   active = false;
   cancelAnimationFrame(frame);
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  scene?.dispose();
+  scene = null;
 }

@@ -82,5 +82,6 @@ export function startGarage() {
 }
 
 export function stopGarage() {
-  preview?.stop();
+  preview?.dispose();
+  preview = null;
 }

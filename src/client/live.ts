@@ -10,6 +10,7 @@ const EYE =
 
 let timer = 0;
 let visible = false;
+let polling = false;
 let cards = new Map<string, HTMLLIElement>();
 let empty: HTMLLIElement | null = null;
 let onWatch: (code: string) => void = () => {};
@@ -89,17 +90,24 @@ function renderBadge(rooms: LiveRoom[]) {
 
 async function poll() {
   clearTimeout(timer);
+  if (document.hidden || polling) return;
+  polling = true;
   try {
-    const rooms: LiveRoom[] = await (await fetch("/api/live")).json();
+    const response = await fetch("/api/live");
+    if (!response.ok) throw new Error("Live races unavailable");
+    const rooms: LiveRoom[] = await response.json();
     renderBadge(rooms);
     if (visible) render(rooms);
   } catch {}
-  timer = window.setTimeout(poll, visible ? 1000 : 5000);
+  polling = false;
+  clearTimeout(timer);
+  if (!document.hidden) timer = window.setTimeout(poll, visible ? 1000 : 15000);
 }
 
 export function initLive(watch: (code: string) => void) {
   onWatch = watch;
   document.addEventListener("visibilitychange", () => {
+    clearTimeout(timer);
     if (!document.hidden) void poll();
   });
   void poll();
@@ -107,5 +115,9 @@ export function initLive(watch: (code: string) => void) {
 
 export function showLive(on: boolean) {
   visible = on;
-  if (on) void poll();
+  clearTimeout(timer);
+  if (!document.hidden) {
+    if (on) void poll();
+    else timer = window.setTimeout(poll, 15000);
+  }
 }
