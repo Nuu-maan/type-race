@@ -24,6 +24,14 @@ test("races add xp, stats and leaderboard rows", async () => {
   expect(await leaderboard("easy")).toHaveLength(0);
 });
 
+test("leaderboards keep accuracy paired with the scored race", async () => {
+  await ensurePlayer("paired", "Paired", "sunset");
+  await recordRace({ player: "paired", difficulty: "easy", wpm: 100, accuracy: 70, won: false, xp: 10 });
+  await recordRace({ player: "paired", difficulty: "easy", wpm: 90, accuracy: 99, won: true, xp: 10 });
+  const [row] = await leaderboard("easy");
+  expect(row).toMatchObject({ name: "Paired", bestWpm: 100, accuracy: 70, races: 2, wins: 1 });
+});
+
 test("race writes return authoritative xp", async () => {
   await ensurePlayer("xp", "XP", "violet");
   const first = await recordRace({ player: "xp", difficulty: "normal", wpm: 50, accuracy: 100, won: false, xp: 60 });
@@ -80,6 +88,18 @@ test("attempts build history, goals, ghost data and competitions", async () => {
   });
   await recordAttempt({
     player: "d",
+    mode: "daily",
+    difficulty: "normal",
+    seed: 42,
+    challengeKey: dayKey(),
+    wpm: 85,
+    accuracy: 80,
+    durationMs: 44_000,
+    won: true,
+    xp: 50,
+  });
+  await recordAttempt({
+    player: "d",
     mode: "practice",
     difficulty: "easy",
     seed: 43,
@@ -91,12 +111,12 @@ test("attempts build history, goals, ghost data and competitions", async () => {
   });
 
   const profile = (await getProfile("d"))!;
-  expect(profile).toMatchObject({ races: 2, bestWpm: 80, averageAccuracy: 97, practiceRaces: 2, dailyStreak: 1, readyInMs: 4200 });
-  expect(profile.history.map((attempt) => attempt.mode)).toEqual(["practice", "daily"]);
+  expect(profile).toMatchObject({ races: 3, bestWpm: 85, averageAccuracy: 91, practiceRaces: 3, dailyStreak: 1, readyInMs: 4200 });
+  expect(profile.history.map((attempt) => attempt.mode)).toEqual(["practice", "daily", "daily"]);
   expect(profile.goals.find((goal) => goal.id === "daily")?.current).toBe(1);
   expect(await bestGhost("d")).toMatchObject({ wpm: 80, durationMs: 45_000 });
 
   const board = await competitions("d");
-  expect(board.daily.you).toMatchObject({ name: "Daily", score: 77 });
-  expect(board.weekly.you).toMatchObject({ days: 1, score: 77 });
+  expect(board.daily.you).toMatchObject({ name: "Daily", score: 77, wpm: 80, accuracy: 97 });
+  expect(board.weekly.you).toMatchObject({ days: 1, score: 77, wpm: 80, accuracy: 97 });
 });

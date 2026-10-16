@@ -285,24 +285,27 @@ export async function competitions(player?: string) {
   const today = dayKey();
   const monday = weekKey();
   const daily: CompetitionRow[] = await db`
-    SELECT p.id, p.name, p.xp, p.paint,
-      CAST(MAX(a.wpm * a.accuracy / 100.0) AS INTEGER) AS score,
-      MAX(a.wpm) AS wpm, MAX(a.accuracy) AS accuracy
-    FROM attempts a JOIN players p ON p.id = a.player_id
-    WHERE a.mode = 'daily' AND a.challenge_key = ${today}
-    GROUP BY p.id, p.name, p.xp, p.paint
+    WITH ranked AS (
+      SELECT a.player_id, CAST(a.wpm * a.accuracy / 100.0 AS INTEGER) AS score, a.wpm, a.accuracy,
+        ROW_NUMBER() OVER (PARTITION BY a.player_id ORDER BY a.wpm * a.accuracy DESC, a.wpm DESC, a.accuracy DESC, a.at ASC) AS rank
+      FROM attempts a WHERE a.mode = 'daily' AND a.challenge_key = ${today}
+    )
+    SELECT p.id, p.name, p.xp, p.paint, r.score, r.wpm, r.accuracy
+    FROM ranked r JOIN players p ON p.id = r.player_id
+    WHERE r.rank = 1
     ORDER BY score DESC, wpm DESC
     LIMIT 20`;
   const weekly: CompetitionRow[] = await db`
+    WITH ranked AS (
+      SELECT player_id, challenge_key, CAST(wpm * accuracy / 100.0 AS INTEGER) AS score, wpm, accuracy,
+        ROW_NUMBER() OVER (PARTITION BY player_id, challenge_key ORDER BY wpm * accuracy DESC, wpm DESC, accuracy DESC, at ASC) AS rank
+      FROM attempts WHERE mode = 'daily' AND challenge_key >= ${monday}
+    ), daily_best AS (
+      SELECT player_id, score, wpm, accuracy FROM ranked WHERE rank = 1
+    )
     SELECT p.id, p.name, p.xp, p.paint, CAST(SUM(d.score) AS INTEGER) AS score,
       MAX(d.wpm) AS wpm, CAST(ROUND(AVG(d.accuracy)) AS INTEGER) AS accuracy, CAST(COUNT(*) AS INTEGER) AS days
-    FROM (
-      SELECT player_id, challenge_key, CAST(MAX(wpm * accuracy / 100.0) AS INTEGER) AS score,
-        MAX(wpm) AS wpm, MAX(accuracy) AS accuracy
-      FROM attempts
-      WHERE mode = 'daily' AND challenge_key >= ${monday}
-      GROUP BY player_id, challenge_key
-    ) d JOIN players p ON p.id = d.player_id
+    FROM daily_best d JOIN players p ON p.id = d.player_id
     GROUP BY p.id, p.name, p.xp, p.paint
     ORDER BY score DESC, days DESC, wpm DESC
     LIMIT 20`;
@@ -319,11 +322,17 @@ type BoardRow = { name: string; xp: number; paint: string; best: number; accurac
 export async function leaderboard(difficulty: Difficulty) {
   await ready;
   const rows: BoardRow[] = await db`
-    SELECT p.name, p.xp, p.paint, MAX(r.wpm) AS best, CAST(ROUND(AVG(r.accuracy)) AS INTEGER) AS accuracy,
-      CAST(COUNT(*) AS INTEGER) AS races, CAST(SUM(r.won) AS INTEGER) AS wins
-    FROM races r JOIN players p ON p.id = r.player_id
-    WHERE r.difficulty = ${difficulty}
-    GROUP BY p.id, p.name, p.xp, p.paint
+    WITH ranked AS (
+      SELECT player_id, wpm, accuracy,
+        ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY wpm DESC, accuracy DESC, at ASC) AS rank
+      FROM races WHERE difficulty = ${difficulty}
+    ), stats AS (
+      SELECT player_id, CAST(COUNT(*) AS INTEGER) AS races, CAST(SUM(won) AS INTEGER) AS wins
+      FROM races WHERE difficulty = ${difficulty} GROUP BY player_id
+    )
+    SELECT p.name, p.xp, p.paint, r.wpm AS best, r.accuracy, s.races, s.wins
+    FROM ranked r JOIN players p ON p.id = r.player_id JOIN stats s ON s.player_id = r.player_id
+    WHERE r.rank = 1
     ORDER BY best DESC, wins DESC
     LIMIT 10`;
   return rows.map((r) => ({
