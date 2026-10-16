@@ -116,6 +116,14 @@ export type HistoryEntry = {
 };
 
 export type Goal = { id: string; label: string; current: number; target: number; unit: string };
+export type RecordEntry = {
+  mode: RaceMode;
+  difficulty: Difficulty;
+  wpm: number;
+  accuracy: number;
+  durationMs: number;
+  at: number;
+};
 
 export type Profile = {
   id: string;
@@ -128,8 +136,10 @@ export type Profile = {
   bestWpm: number;
   averageAccuracy: number;
   practiceRaces: number;
+  dailyRaces: number;
   dailyStreak: number;
   readyInMs: number | null;
+  records: RecordEntry[];
   history: HistoryEntry[];
   goals: Goal[];
 };
@@ -142,11 +152,30 @@ export async function getProfile(id: string): Promise<Profile | null> {
     SELECT CAST(COUNT(*) AS INTEGER) AS races, CAST(COALESCE(SUM(won), 0) AS INTEGER) AS wins, MAX(wpm) AS best
     FROM races WHERE player_id = ${id}`;
   const [solo] = await db`
-    SELECT CAST(COUNT(*) AS INTEGER) AS races, MAX(wpm) AS best, CAST(COALESCE(ROUND(AVG(accuracy)), 0) AS INTEGER) AS accuracy
+    SELECT CAST(COUNT(*) AS INTEGER) AS races, MAX(wpm) AS best
     FROM attempts WHERE player_id = ${id} AND mode != 'multiplayer'`;
   const [attemptStats] = await db`
-    SELECT CAST(COUNT(*) AS INTEGER) AS races, CAST(COALESCE(ROUND(AVG(accuracy)), 0) AS INTEGER) AS accuracy
+    SELECT CAST(COUNT(*) AS INTEGER) AS races, CAST(COALESCE(ROUND(AVG(accuracy)), 0) AS INTEGER) AS accuracy FROM (
+      SELECT accuracy FROM races WHERE player_id = ${id}
+      UNION ALL
+      SELECT accuracy FROM attempts WHERE player_id = ${id} AND mode != 'multiplayer'
+    ) results`;
+  const [modeStats] = await db`
+    SELECT CAST(COALESCE(SUM(CASE WHEN mode IN ('practice', 'ghost') THEN 1 ELSE 0 END), 0) AS INTEGER) AS practice,
+      CAST(COALESCE(SUM(CASE WHEN mode = 'daily' THEN 1 ELSE 0 END), 0) AS INTEGER) AS daily
     FROM attempts WHERE player_id = ${id}`;
+  const recordRows = await db`
+    WITH results AS (
+      SELECT 'multiplayer' AS mode, difficulty, wpm, accuracy, 0 AS duration_ms, at
+      FROM races WHERE player_id = ${id}
+      UNION ALL
+      SELECT mode, difficulty, wpm, accuracy, duration_ms, at
+      FROM attempts WHERE player_id = ${id} AND mode != 'multiplayer'
+    ), ranked AS (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY difficulty ORDER BY wpm DESC, accuracy DESC, at ASC) AS rank
+      FROM results
+    )
+    SELECT mode, difficulty, wpm, accuracy, duration_ms, at FROM ranked WHERE rank = 1 ORDER BY wpm DESC`;
   const historyRows = await db`
     SELECT id, mode, difficulty, wpm, accuracy, duration_ms, won, xp, challenge_key, at
     FROM attempts WHERE player_id = ${id} ORDER BY at DESC LIMIT 12`;
@@ -175,9 +204,18 @@ export async function getProfile(id: string): Promise<Profile | null> {
     wins: ranked.wins,
     bestWpm,
     averageAccuracy: attemptStats.races ? attemptStats.accuracy : 0,
-    practiceRaces: solo.races,
+    practiceRaces: modeStats.practice,
+    dailyRaces: modeStats.daily,
     dailyStreak: dailyStreak(challengeRows.map((entry: { challenge_key: string }) => entry.challenge_key)),
     readyInMs: activation.ready ?? null,
+    records: recordRows.map((entry: Record<string, unknown>) => ({
+      mode: entry.mode as RaceMode,
+      difficulty: entry.difficulty as Difficulty,
+      wpm: entry.wpm as number,
+      accuracy: entry.accuracy as number,
+      durationMs: entry.duration_ms as number,
+      at: Number(entry.at),
+    })),
     history: historyRows.map((entry: Record<string, any>) => ({
       id: Number(entry.id),
       mode: entry.mode,
@@ -284,14 +322,21 @@ export async function logEvent(entry: { player: string | null; session: string; 
 export async function bestGhost(player: string) {
   await ready;
   const [row] = await db`
-    SELECT wpm, duration_ms, trace FROM attempts
+    SELECT seed, difficulty, wpm, accuracy, duration_ms, trace FROM attempts
     WHERE player_id = ${player} AND trace IS NOT NULL
     ORDER BY wpm DESC, accuracy DESC, at DESC LIMIT 1`;
   if (!row) return null;
   try {
     const trace = JSON.parse(row.trace);
     if (!Array.isArray(trace) || trace.length < 2) return null;
-    return { wpm: row.wpm as number, durationMs: row.duration_ms as number, trace: trace as [number, number][] };
+    return {
+      seed: Number(row.seed),
+      difficulty: row.difficulty as Difficulty,
+      wpm: row.wpm as number,
+      accuracy: row.accuracy as number,
+      durationMs: row.duration_ms as number,
+      trace: trace as [number, number][],
+    };
   } catch {
     return null;
   }

@@ -121,10 +121,22 @@ test("attempts build history, goals, ghost data and competitions", async () => {
   });
 
   const profile = (await getProfile("d"))!;
-  expect(profile).toMatchObject({ races: 3, bestWpm: 85, averageAccuracy: 91, practiceRaces: 3, dailyStreak: 1, readyInMs: 4200 });
+  expect(profile).toMatchObject({
+    races: 3,
+    bestWpm: 85,
+    averageAccuracy: 91,
+    practiceRaces: 1,
+    dailyRaces: 2,
+    dailyStreak: 1,
+    readyInMs: 4200,
+  });
+  expect(profile.records).toEqual([
+    expect.objectContaining({ mode: "daily", difficulty: "normal", wpm: 85, accuracy: 80 }),
+    expect.objectContaining({ mode: "practice", difficulty: "easy", wpm: 70, accuracy: 96 }),
+  ]);
   expect(profile.history.map((attempt) => attempt.mode)).toEqual(["practice", "daily", "daily"]);
   expect(profile.goals.find((goal) => goal.id === "daily")?.current).toBe(1);
-  expect(await bestGhost("d")).toMatchObject({ wpm: 80, durationMs: 45_000 });
+  expect(await bestGhost("d")).toMatchObject({ seed: 42, difficulty: "normal", wpm: 80, accuracy: 97, durationMs: 45_000 });
 
   const board = await competitions("d");
   expect(board.daily.you).toMatchObject({ name: "Daily", score: 77, wpm: 80, accuracy: 97 });
