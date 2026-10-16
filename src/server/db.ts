@@ -52,6 +52,7 @@ async function migrate() {
     xp INTEGER NOT NULL,
     first_key_ms INTEGER,
     trace TEXT,
+    text TEXT,
     at BIGINT NOT NULL
   )`);
   await db.unsafe("CREATE INDEX IF NOT EXISTS attempts_by_player ON attempts (player_id, at)");
@@ -278,14 +279,15 @@ export type AttemptEntry = {
   xp: number;
   firstKeyMs?: number | null;
   trace?: [number, number][];
+  text?: string | null;
 };
 
 async function insertAttempt(tx: SQL, entry: AttemptEntry, at: number) {
   const [inserted] = await tx`
-    INSERT INTO attempts (run_id, player_id, mode, difficulty, seed, challenge_key, wpm, accuracy, duration_ms, won, xp, first_key_ms, trace, at)
+    INSERT INTO attempts (run_id, player_id, mode, difficulty, seed, challenge_key, wpm, accuracy, duration_ms, won, xp, first_key_ms, trace, text, at)
     VALUES (${entry.runId ?? crypto.randomUUID()}, ${entry.player}, ${entry.mode}, ${entry.difficulty}, ${entry.seed}, ${entry.challengeKey ?? null},
       ${entry.wpm}, ${entry.accuracy}, ${entry.durationMs}, ${entry.won ? 1 : 0}, ${entry.xp}, ${entry.firstKeyMs ?? null},
-      ${entry.trace ? JSON.stringify(entry.trace) : null}, ${at})
+      ${entry.trace ? JSON.stringify(entry.trace) : null}, ${entry.text ?? null}, ${at})
     ON CONFLICT (run_id) DO NOTHING RETURNING id`;
   return Boolean(inserted);
 }
@@ -334,8 +336,8 @@ export async function logEvent(entry: { player: string | null; session: string; 
 export async function bestGhost(player: string) {
   await ready;
   const [row] = await db`
-    SELECT seed, difficulty, wpm, accuracy, duration_ms, trace FROM attempts
-    WHERE player_id = ${player} AND trace IS NOT NULL
+    SELECT seed, difficulty, wpm, accuracy, duration_ms, trace, text FROM attempts
+    WHERE player_id = ${player} AND trace IS NOT NULL AND text IS NOT NULL
     ORDER BY wpm DESC, accuracy DESC, at DESC LIMIT 1`;
   if (!row) return null;
   try {
@@ -348,6 +350,7 @@ export async function bestGhost(player: string) {
       accuracy: row.accuracy as number,
       durationMs: row.duration_ms as number,
       trace: trace as [number, number][],
+      text: row.text as string,
     };
   } catch {
     return null;

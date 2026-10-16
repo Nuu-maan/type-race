@@ -111,6 +111,7 @@ test("attempts build history, goals, ghost data and competitions", async () => {
     xp: 90,
     firstKeyMs: 4200,
     trace: [[0, 0], [22_500, 500], [45_000, 1000]],
+    text: "saved daily text",
   });
   await recordAttempt({
     player: "d",
@@ -152,7 +153,14 @@ test("attempts build history, goals, ghost data and competitions", async () => {
   ]);
   expect(profile.history.map((attempt) => attempt.mode)).toEqual(["practice", "daily", "daily"]);
   expect(profile.goals.find((goal) => goal.id === "daily")?.current).toBe(1);
-  expect(await bestGhost("d")).toMatchObject({ seed: 42, difficulty: "normal", wpm: 80, accuracy: 97, durationMs: 45_000 });
+  expect(await bestGhost("d")).toMatchObject({
+    seed: 42,
+    difficulty: "normal",
+    wpm: 80,
+    accuracy: 97,
+    durationMs: 45_000,
+    text: "saved daily text",
+  });
 
   const board = await competitions("d");
   expect(board.daily.you).toMatchObject({ name: "Daily", score: 77, wpm: 80, accuracy: 97 });
