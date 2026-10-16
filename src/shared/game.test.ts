@@ -154,8 +154,9 @@ test("hard races punish mistakes more than easy ones", () => {
 
 test("speed is capped against key floods", () => {
   const { race, p } = solo();
-  drive(race, p, 500, 3, 0);
+  const now = drive(race, p, 500, 3, 0);
   expect(p.speed).toBeLessThanOrEqual(200 * (TRACK / 3600) * 1.25 + 0.01);
+  expect(results(race, now)[0]!.wpm).toBeLessThanOrEqual(200);
 });
 
 test("five racers finish in order and the race waits for stragglers", () => {

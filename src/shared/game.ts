@@ -225,7 +225,7 @@ export function results(race: Race, now: number) {
       place: i + 1,
       finished: p.finishedAt !== null,
       left: p.left,
-      wpm: Math.round(correctChars / 5 / Math.max(minutes, 1 / 60)),
+      wpm: Math.min(MAX_WPM, Math.round(correctChars / 5 / Math.max(minutes, 1 / 60))),
       accuracy: p.totalKeys ? Math.round((p.correctKeys / p.totalKeys) * 100) : 100,
       time: Math.round(minutes * 600) / 10,
       pos: p.pos,
