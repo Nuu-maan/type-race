@@ -204,7 +204,7 @@ export async function getProfile(id: string): Promise<Profile | null> {
     FROM attempts WHERE player_id = ${id} AND at >= ${todayAt} AND finished = 1`;
   const challengeRows = await db`
     SELECT DISTINCT challenge_key FROM attempts
-    WHERE player_id = ${id} AND mode = 'daily' AND challenge_key IS NOT NULL
+    WHERE player_id = ${id} AND mode = 'daily' AND finished = 1 AND challenge_key IS NOT NULL
     ORDER BY challenge_key DESC`;
   const [activation] = await db`
     SELECT MIN(elapsed_ms) AS ready FROM events

@@ -316,4 +316,5 @@ test("competition totals and personal ranks extend beyond the top twenty", async
   expect(board.daily.entries).toHaveLength(21);
   expect(board.daily.you).toMatchObject({ name: "Crowd Low", rank: before + 21 });
   expect(board.daily.entries.some((entry) => entry.name === "Crowd Unfinished")).toBe(false);
+  expect((await getProfile("crowd-unfinished"))!.dailyStreak).toBe(0);
 }, 10_000);
