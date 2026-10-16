@@ -42,3 +42,8 @@ export function tracePosition(trace: RaceTrace, elapsedMs: number) {
   }
   return trace.at(-1)![1];
 }
+
+export function ghostFinishAt(startedAt: number, durationMs: number, now: number) {
+  const finishedAt = startedAt + durationMs;
+  return now >= finishedAt ? finishedAt : null;
+}

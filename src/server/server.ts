@@ -16,7 +16,7 @@ import {
 } from "./db";
 import { OG_IMAGES, originOf, pageFor, robots, sitemap, withHead } from "./meta";
 import { applyBackspace, applyKey, createRace, FINISH_GRACE_MS, raceOver, results, tick, TRACK, wpm, type Race } from "../shared/game";
-import { dayKey, isRaceMode, tracePosition, type RaceMode, type RaceTrace } from "../shared/challenge";
+import { dayKey, ghostFinishAt, isRaceMode, tracePosition, type RaceMode, type RaceTrace } from "../shared/challenge";
 import {
   canUse,
   DEFAULT_CARS,
@@ -324,6 +324,7 @@ function startTimer(room: Room) {
       broadcast(room, { t: "go" });
     }
     tick(race, (t - last) / 1000, t);
+    if (room.ghost && race.firstFinishAt === null) race.firstFinishAt = ghostFinishAt(race.startedAt, room.ghost.durationMs, t);
     last = t;
     captureTrace(room, t);
     broadcast(room, {
