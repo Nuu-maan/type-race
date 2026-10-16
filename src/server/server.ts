@@ -29,7 +29,7 @@ import {
   type Car,
   type Difficulty,
 } from "../shared/progress";
-import { acceptControl, acceptInput, inputRate, parseInputMessage, type InputRate } from "./socket-guard";
+import { acceptControl, acceptInput, inputRate, parseClientMessage, parseInputMessage, type InputRate } from "./socket-guard";
 
 const COUNTDOWN_MS = 3000;
 const TICK_MS = 50;
@@ -734,13 +734,9 @@ export const server = Bun.serve({
       const room = rooms.get(ws.data.code);
       if (!room || ws.data.role === "watch") return;
       room.active = Date.now();
-      let msg: { t?: string; c?: unknown; d?: unknown; paint?: unknown; body?: unknown };
-      try {
-        msg = JSON.parse(String(raw));
-      } catch {
-        return;
-      }
-      if (["key", "back", "wordBack", "start"].includes(msg.t ?? "")) {
+      let msg = parseClientMessage(raw);
+      if (!msg) return;
+      if (typeof msg.t === "string" && ["key", "back", "wordBack", "start"].includes(msg.t)) {
         const input = parseInputMessage(raw);
         if (!input || !acceptInput(ws.data.rate)) {
           ws.data.eligible = false;

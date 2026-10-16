@@ -66,6 +66,7 @@ test("practice starts on the first key and reconnects without losing progress", 
   expect(ready).toMatchObject({ mode: "practice", ms: 0 });
   expect(await (await fetch(`${base}/api/live`)).json()).toEqual([]);
 
+  race.socket.send("null");
   race.socket.send(JSON.stringify({ t: "key", c: ready.text[0] }));
   await race.next("go");
   const state = await race.next("state");

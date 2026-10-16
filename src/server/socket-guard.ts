@@ -25,7 +25,7 @@ function hasOnly(value: Record<string, unknown>, keys: string[]) {
   return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 }
 
-export function parseInputMessage(raw: string | ArrayBufferView): InputMessage | null {
+export function parseClientMessage(raw: string | ArrayBufferView) {
   const text = textOf(raw);
   if (text === null) return null;
 
@@ -36,8 +36,12 @@ export function parseInputMessage(raw: string | ArrayBufferView): InputMessage |
     return null;
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
 
-  const message = value as Record<string, unknown>;
+export function parseInputMessage(raw: string | ArrayBufferView): InputMessage | null {
+  const message = parseClientMessage(raw);
+  if (!message) return null;
   if (message.t === "key") {
     if (!hasOnly(message, ["t", "c"]) || typeof message.c !== "string") return null;
     return [...message.c].length === 1 && !/[\p{C}\p{M}]/u.test(message.c) ? { t: "key", c: message.c } : null;

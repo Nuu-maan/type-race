@@ -6,6 +6,7 @@ import {
   MAX_INPUT_MESSAGE_BYTES,
   MAX_INPUTS_PER_WINDOW,
   MAX_CONTROLS_PER_WINDOW,
+  parseClientMessage,
   parseInputMessage,
 } from "./socket-guard";
 
@@ -19,6 +20,8 @@ test("accepts the supported input messages", () => {
 });
 
 test("rejects malformed, oversized, or unexpected messages", () => {
+  expect(parseClientMessage("null")).toBeNull();
+  expect(parseClientMessage("[]")).toBeNull();
   expect(parseInputMessage("{")).toBeNull();
   expect(parseInputMessage("null")).toBeNull();
   expect(parseInputMessage('{"t":"key","c":"ab"}')).toBeNull();
