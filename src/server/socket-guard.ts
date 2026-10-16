@@ -1,6 +1,7 @@
 export const MAX_INPUT_MESSAGE_BYTES = 64;
 export const INPUT_WINDOW_MS = 1000;
 export const MAX_INPUTS_PER_WINDOW = 80;
+export const MAX_CONTROLS_PER_WINDOW = 10;
 
 export type InputMessage = { t: "key"; c: string } | { t: "back" } | { t: "wordBack" } | { t: "start" };
 
@@ -49,12 +50,20 @@ export function inputRate(now = Date.now()): InputRate {
   return { startedAt: now, accepted: 0 };
 }
 
-export function acceptInput(rate: InputRate, now = Date.now()) {
+function accept(rate: InputRate, limit: number, now: number) {
   if (now < rate.startedAt || now - rate.startedAt >= INPUT_WINDOW_MS) {
     rate.startedAt = now;
     rate.accepted = 0;
   }
-  if (rate.accepted >= MAX_INPUTS_PER_WINDOW) return false;
+  if (rate.accepted >= limit) return false;
   rate.accepted++;
   return true;
+}
+
+export function acceptInput(rate: InputRate, now = Date.now()) {
+  return accept(rate, MAX_INPUTS_PER_WINDOW, now);
+}
+
+export function acceptControl(rate: InputRate, now = Date.now()) {
+  return accept(rate, MAX_CONTROLS_PER_WINDOW, now);
 }

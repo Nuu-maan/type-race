@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
 import {
   acceptInput,
+  acceptControl,
   inputRate,
   MAX_INPUT_MESSAGE_BYTES,
   MAX_INPUTS_PER_WINDOW,
+  MAX_CONTROLS_PER_WINDOW,
   parseInputMessage,
 } from "./socket-guard";
 
@@ -34,4 +36,11 @@ test("limits each input window and resets at its boundary", () => {
   expect(acceptInput(rate, 1999)).toBe(false);
   expect(acceptInput(rate, 2000)).toBe(true);
   expect(rate).toEqual({ startedAt: 2000, accepted: 1 });
+});
+
+test("limits lower-frequency control messages separately", () => {
+  const rate = inputRate(1000);
+  for (let i = 0; i < MAX_CONTROLS_PER_WINDOW; i++) expect(acceptControl(rate, 1000)).toBe(true);
+  expect(acceptControl(rate, 1500)).toBe(false);
+  expect(acceptControl(rate, 2000)).toBe(true);
 });
