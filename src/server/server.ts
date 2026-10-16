@@ -35,7 +35,7 @@ const COUNTDOWN_MS = 3000;
 const TICK_MS = 50;
 const PLAYER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_SPECTATORS = 50;
-const RECONNECT_MS = 8000;
+const RECONNECT_MS = FINISH_GRACE_MS + 1000;
 const ROOM_IDLE_MS = Number(process.env.ROOM_IDLE_MS ?? 10 * 60_000);
 const production = process.env.NODE_ENV === "production";
 const clientDirectory = `${import.meta.dir}/../../dist/client`;

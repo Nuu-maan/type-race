@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { FINISH_GRACE_MS } from "../shared/game";
 
 const directory = mkdtempSync(join(tmpdir(), "type-race-server-"));
 const port = 32_000 + Math.floor(Math.random() * 10_000);
@@ -57,7 +58,7 @@ afterAll(() => {
   rmSync(directory, { recursive: true, force: true });
 });
 
-test("practice starts on the first key and reconnects without losing progress", async () => {
+test("practice starts on the first key and reconnects through the result grace", async () => {
   const player = crypto.randomUUID();
   const session = crypto.randomUUID();
   const race = inbox(`ws://127.0.0.1:${port}/ws?room=SOLO&mode=practice&pid=${player}&sid=${session}`);
@@ -72,13 +73,13 @@ test("practice starts on the first key and reconnects without losing progress", 
   const state = await race.next("state");
   expect(state.players[0].id).toBe(hello.you);
   race.socket.close();
-  await Bun.sleep(20);
+  await Bun.sleep(FINISH_GRACE_MS + 100);
 
   const resumed = inbox(`ws://127.0.0.1:${port}/ws?room=SOLO&mode=practice&pid=${player}&sid=${session}&resume=${hello.resume}`);
   expect(await resumed.next("hello")).toMatchObject({ you: hello.you, reconnected: true });
   expect(await resumed.next("resume")).toMatchObject({ mode: "practice", self: { typed: 1 } });
   resumed.socket.close();
-});
+}, FINISH_GRACE_MS + 5000);
 
 test("multiplayer still waits for two racers", async () => {
   const host = inbox(`ws://127.0.0.1:${port}/ws?room=NEW&name=Host&pid=${crypto.randomUUID()}`);
