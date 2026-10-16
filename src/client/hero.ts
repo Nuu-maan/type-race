@@ -37,7 +37,7 @@ function run() {
     if (!loading) {
       loading = import("./scene")
         .then(({ createScene }) => {
-          if (!active || !visible || document.hidden) return;
+          if (!active || !visible || document.hidden || matchMedia("(max-width: 560px)").matches) return;
           scene = createScene(canvas);
           resizeObserver = new ResizeObserver(() => scene?.resize());
           resizeObserver.observe(canvas);
