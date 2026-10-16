@@ -1,8 +1,9 @@
 import { SQL } from "bun";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { dayKey, nextWpmTarget, weekKey, type RaceMode } from "../shared/challenge";
+import { challengeSeed, dayKey, nextWpmTarget, weekKey, type RaceMode } from "../shared/challenge";
 import { canUse, levelFromXp, type Car, type Difficulty } from "../shared/progress";
+import { generateText } from "../shared/words";
 
 function connect() {
   if (process.env.DATABASE_URL) return new SQL(process.env.DATABASE_URL, { prepare: false });
@@ -64,10 +65,42 @@ async function migrate() {
     at BIGINT NOT NULL
   )`);
   await db.unsafe("CREATE INDEX IF NOT EXISTS events_by_player ON events (player_id, at)");
+  await db.unsafe(`CREATE TABLE IF NOT EXISTS challenges (
+    key TEXT PRIMARY KEY,
+    seed BIGINT NOT NULL,
+    difficulty TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at BIGINT NOT NULL
+  )`);
 }
 
 const ready = migrate();
 ready.catch((error) => console.error("Database setup failed:", error));
+
+export async function databaseReady() {
+  await ready;
+  const [row] = await db`SELECT 1 AS ok`;
+  return row.ok === 1;
+}
+
+export async function dailyChallenge(now = Date.now()) {
+  await ready;
+  const key = dayKey(now);
+  const seed = challengeSeed(key);
+  const difficulty: Difficulty = "normal";
+  await db`
+    INSERT INTO challenges (key, seed, difficulty, text, created_at)
+    VALUES (${key}, ${seed}, ${difficulty}, ${generateText(seed, difficulty)}, ${now})
+    ON CONFLICT (key) DO NOTHING`;
+  const [challenge] = await db`SELECT key, seed, difficulty, text FROM challenges WHERE key = ${key}`;
+  return {
+    key: challenge.key as string,
+    seed: Number(challenge.seed),
+    difficulty: challenge.difficulty as Difficulty,
+    text: challenge.text as string,
+    endsAt: Date.parse(`${key}T00:00:00.000Z`) + 86_400_000,
+  };
+}
 
 export type HistoryEntry = {
   id: number;

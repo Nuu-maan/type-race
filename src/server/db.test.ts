@@ -2,7 +2,17 @@ import { expect, test } from "bun:test";
 import { dayKey } from "../shared/challenge";
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? ":memory:";
-const { bestGhost, competitions, ensurePlayer, getProfile, leaderboard, logEvent, recordAttempt, recordRace, setCar } = await import("./db");
+const { bestGhost, competitions, dailyChallenge, databaseReady, ensurePlayer, getProfile, leaderboard, logEvent, recordAttempt, recordRace, setCar } = await import("./db");
+
+test("database readiness and daily text are stable", async () => {
+  expect(await databaseReady()).toBe(true);
+  const now = Date.UTC(2026, 9, 16, 10);
+  const first = await dailyChallenge(now);
+  const second = await dailyChallenge(now + 60_000);
+  expect(second).toEqual(first);
+  expect(first).toMatchObject({ key: "2026-10-16", difficulty: "normal", endsAt: Date.UTC(2026, 9, 17) });
+  expect(first.text.length).toBeGreaterThan(100);
+});
 
 test("races add xp, stats and leaderboard rows", async () => {
   await ensurePlayer("a", "Numan", "cobalt");
