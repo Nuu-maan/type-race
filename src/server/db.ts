@@ -16,6 +16,7 @@ const db = connect();
 const postgres = db.options.adapter === "postgres";
 
 async function migrate() {
+  if (!postgres) await db.unsafe("PRAGMA foreign_keys = ON");
   await db.unsafe(`CREATE TABLE IF NOT EXISTS players (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,

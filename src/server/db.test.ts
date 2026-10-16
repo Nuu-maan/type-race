@@ -50,9 +50,15 @@ test("locked cars are refused", async () => {
 });
 
 test("renaming keeps progress", async () => {
-  await ensurePlayer("a", "Numan K", "cobalt");
-  expect((await getProfile("a"))!.name).toBe("Numan K");
-  expect((await getProfile("a"))!.xp).toBe(270);
+  await ensurePlayer("rename", "Before", "cobalt");
+  await recordRace({ player: "rename", difficulty: "normal", wpm: 40, accuracy: 90, won: false, xp: 25 });
+  await ensurePlayer("rename", "After", "cobalt");
+  expect((await getProfile("rename"))!.name).toBe("After");
+  expect((await getProfile("rename"))!.xp).toBe(25);
+});
+
+test("race records require an existing player", async () => {
+  await expect(recordRace({ player: "missing", difficulty: "normal", wpm: 40, accuracy: 90, won: false, xp: 25 })).rejects.toThrow();
 });
 
 test("attempts build history, goals, ghost data and competitions", async () => {
