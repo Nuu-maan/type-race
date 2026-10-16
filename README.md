@@ -87,11 +87,11 @@ This starts the server and a Cloudflare quick tunnel and prints a public `https:
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Nuu-maan/type-race)
 
-`render.yaml` sets up one free web service built from the `Dockerfile`. Rooms live in memory, so keep it at one instance.
+`render.yaml` sets up one free web service built from the `Dockerfile`. Rooms live in memory, so keep it at one instance. During the first Blueprint setup, Render asks for `DATABASE_URL`; use a Postgres connection string (the pooled one from Neon works well). Existing services must add it in the Render dashboard before syncing the updated Blueprint.
 
 Render's free tier sleeps after 15 minutes without traffic. On Render the server requests its own public address (`RENDER_EXTERNAL_URL`, which Render sets) every 10 minutes, so it stays awake. One service running all month fits in the free tier's monthly hours.
 
-Set `DATABASE_URL` on the service to a Postgres connection string (the pooled one from Neon works well) so profiles and the leaderboard survive restarts and redeploys. Without it the server uses a SQLite file inside the container, which resets on every deploy.
+Render checks `/api/health`, which verifies the database before a deploy receives traffic. A Render process without `DATABASE_URL` refuses to start so profiles, personal records, challenges, telemetry and leaderboards cannot silently fall back to disposable container storage.
 
 ## Controls
 
@@ -120,7 +120,7 @@ docs/         README screenshots
 
 `shared` runs on both sides, so your own car reacts the moment you type while the server stays the referee. Tuning constants for the race sit at the top of `src/shared/game.ts`. Tests live next to the code they cover.
 
-Profiles are keyed by an id each browser keeps. With `DATABASE_URL` set they live in that Postgres database; without it they live in `data/type-race.sqlite` (set `DB_PATH` to use another file). Set `PORT` to use another port.
+Profiles are keyed by an id each browser keeps. Local development and `bun run share` use `data/type-race.sqlite` by default; set `DB_PATH` to use another local file or `DATABASE_URL` to use Postgres. Render requires `DATABASE_URL`. Set `PORT` to use another port.
 
 The project is linked to Neon. To work against your own copy of the data instead of production, create a branch and pull its connection string into `.env.local`, which Bun loads on its own:
 
