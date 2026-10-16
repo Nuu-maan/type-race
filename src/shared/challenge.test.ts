@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { challengeSeed, dayKey, isRaceMode, nextWpmTarget, weekKey } from "./challenge";
+import { challengeSeed, dayKey, isRaceMode, nextWpmTarget, tracePosition, weekKey } from "./challenge";
 
 test("daily challenges are stable for a UTC date", () => {
   const morning = Date.UTC(2026, 9, 16, 1);
@@ -22,4 +22,13 @@ test("race modes and personal targets stay bounded", () => {
   expect(nextWpmTarget(0)).toBe(40);
   expect(nextWpmTarget(59)).toBe(60);
   expect(nextWpmTarget(60)).toBe(65);
+});
+
+test("ghost traces interpolate and stop at their last position", () => {
+  const trace: [number, number][] = [[0, 0], [1000, 400], [2000, 1000]];
+  expect(tracePosition(trace, -1)).toBe(0);
+  expect(tracePosition(trace, 500)).toBe(200);
+  expect(tracePosition(trace, 1500)).toBe(700);
+  expect(tracePosition(trace, 3000)).toBe(1000);
+  expect(tracePosition([], 1000)).toBe(0);
 });

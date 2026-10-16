@@ -1,6 +1,7 @@
 export const RACE_MODES = ["multiplayer", "practice", "ghost", "daily"] as const;
 
 export type RaceMode = (typeof RACE_MODES)[number];
+export type RaceTrace = [elapsedMs: number, position: number][];
 
 export function isRaceMode(value: unknown): value is RaceMode {
   return RACE_MODES.includes(value as RaceMode);
@@ -28,4 +29,16 @@ export function challengeSeed(key: string) {
 
 export function nextWpmTarget(bestWpm: number) {
   return Math.max(40, Math.ceil((bestWpm + 1) / 5) * 5);
+}
+
+export function tracePosition(trace: RaceTrace, elapsedMs: number) {
+  if (!trace.length || elapsedMs <= trace[0]![0]) return trace[0]?.[1] ?? 0;
+  for (let i = 1; i < trace.length; i++) {
+    const next = trace[i]!;
+    if (elapsedMs > next[0]) continue;
+    const previous = trace[i - 1]!;
+    const progress = (elapsedMs - previous[0]) / Math.max(1, next[0] - previous[0]);
+    return previous[1] + (next[1] - previous[1]) * progress;
+  }
+  return trace.at(-1)![1];
 }
