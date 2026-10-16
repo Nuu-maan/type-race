@@ -4,9 +4,10 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "build": "bun build src/client/index.html --outdir dist/client --splitting --minify --target browser --public-path /assets/",
     "dev": "bun --hot src/server/server.ts",
-    "start": "NODE_ENV=production bun src/server/server.ts",
-    "share": "NODE_ENV=production bun src/server/share.ts",
+    "start": "bun run build && NODE_ENV=production bun src/server/server.ts",
+    "share": "bun run build && NODE_ENV=production bun src/server/share.ts",
     "check": "tsc --noEmit",
     "test": "bun test"
   },

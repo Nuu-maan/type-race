@@ -1,5 +1,4 @@
 import type { ServerWebSocket } from "bun";
-import index from "../client/index.html";
 import {
   bestGhost,
   competitions,
@@ -38,6 +37,12 @@ const PLAYER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
 const MAX_SPECTATORS = 50;
 const RECONNECT_MS = 8000;
 const ROOM_IDLE_MS = Number(process.env.ROOM_IDLE_MS ?? 10 * 60_000);
+const production = process.env.NODE_ENV === "production";
+const clientDirectory = `${import.meta.dir}/../../dist/client`;
+const productionShell = Bun.file(`${clientDirectory}/index.html`);
+const shellRoute = production ? productionShell : (await import("../client/index.html")).default;
+
+if (production && !(await productionShell.exists())) throw new Error("Client assets are missing. Run bun run build first.");
 
 type Status = "lobby" | "countdown" | "racing" | "finished";
 type Role = "play" | "watch";
@@ -526,6 +531,13 @@ function shell() {
   return shellHtml;
 }
 
+async function asset(name: string) {
+  if (!/^[a-z0-9_-]+\.(?:css|js)$/i.test(name)) return new Response("Not found", { status: 404 });
+  const file = Bun.file(`${clientDirectory}/${name}`);
+  if (!(await file.exists())) return new Response("Not found", { status: 404 });
+  return new Response(file, { headers: { "cache-control": "public, max-age=31536000, immutable" } });
+}
+
 function hostName(code: string) {
   const room = rooms.get(code);
   return room?.members.find((m) => m.data.id === room.host)?.data.name;
@@ -648,9 +660,10 @@ async function eventResponse(req: Request) {
 
 export const server = Bun.serve({
   port: Number(process.env.PORT ?? 3000),
-  development: process.env.NODE_ENV !== "production",
+  development: !production,
   routes: {
-    "/_shell": index,
+    "/_shell": shellRoute,
+    "/assets/:name": (req) => asset(req.params.name),
     "/": async (req) => {
       const html = withHead(await shell(), pageFor(new URL(req.url), hostName), originOf(req));
       return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
