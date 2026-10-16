@@ -60,6 +60,22 @@ test("race writes return authoritative xp", async () => {
   expect(second).toBe(90);
 });
 
+test("retrying the same race does not add XP twice", async () => {
+  await ensurePlayer("retry", "Retry", "aqua");
+  const attempt = {
+    runId: "same-run",
+    player: "retry",
+    difficulty: "normal" as const,
+    wpm: 50,
+    accuracy: 100,
+    won: true,
+    xp: 60,
+  };
+  expect(await recordRace(attempt)).toBe(60);
+  expect(await recordRace(attempt)).toBe(60);
+  expect((await getProfile("retry"))!.races).toBe(1);
+});
+
 test("locked cars are refused", async () => {
   await ensurePlayer("c", "New", "cobalt");
   expect(await setCar("c", { paint: "gold", body: "gt" })).toBe(false);

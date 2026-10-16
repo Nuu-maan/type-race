@@ -39,6 +39,7 @@ async function migrate() {
   await db.unsafe("CREATE INDEX IF NOT EXISTS races_by_difficulty ON races (difficulty, player_id)");
   await db.unsafe(`CREATE TABLE IF NOT EXISTS attempts (
     id ${postgres ? "BIGINT GENERATED ALWAYS AS IDENTITY" : "INTEGER"} PRIMARY KEY,
+    run_id TEXT NOT NULL UNIQUE,
     player_id TEXT NOT NULL REFERENCES players(id),
     mode TEXT NOT NULL,
     difficulty TEXT NOT NULL,
@@ -264,6 +265,7 @@ export async function setCar(id: string, car: Car) {
 }
 
 export type AttemptEntry = {
+  runId?: string;
   player: string;
   mode: RaceMode;
   difficulty: Difficulty;
@@ -279,16 +281,24 @@ export type AttemptEntry = {
 };
 
 async function insertAttempt(tx: SQL, entry: AttemptEntry, at: number) {
-  await tx`
-    INSERT INTO attempts (player_id, mode, difficulty, seed, challenge_key, wpm, accuracy, duration_ms, won, xp, first_key_ms, trace, at)
-    VALUES (${entry.player}, ${entry.mode}, ${entry.difficulty}, ${entry.seed}, ${entry.challengeKey ?? null}, ${entry.wpm}, ${entry.accuracy},
-      ${entry.durationMs}, ${entry.won ? 1 : 0}, ${entry.xp}, ${entry.firstKeyMs ?? null}, ${entry.trace ? JSON.stringify(entry.trace) : null}, ${at})`;
+  const [inserted] = await tx`
+    INSERT INTO attempts (run_id, player_id, mode, difficulty, seed, challenge_key, wpm, accuracy, duration_ms, won, xp, first_key_ms, trace, at)
+    VALUES (${entry.runId ?? crypto.randomUUID()}, ${entry.player}, ${entry.mode}, ${entry.difficulty}, ${entry.seed}, ${entry.challengeKey ?? null},
+      ${entry.wpm}, ${entry.accuracy}, ${entry.durationMs}, ${entry.won ? 1 : 0}, ${entry.xp}, ${entry.firstKeyMs ?? null},
+      ${entry.trace ? JSON.stringify(entry.trace) : null}, ${at})
+    ON CONFLICT (run_id) DO NOTHING RETURNING id`;
+  return Boolean(inserted);
+}
+
+async function playerXp(tx: SQL, player: string) {
+  const [row] = await tx`SELECT xp FROM players WHERE id = ${player}`;
+  return row.xp as number;
 }
 
 export async function recordAttempt(entry: AttemptEntry) {
   await ready;
   return db.begin(async (tx) => {
-    await insertAttempt(tx, entry, Date.now());
+    if (!(await insertAttempt(tx, entry, Date.now()))) return playerXp(tx, entry.player);
     const [player] = await tx`UPDATE players SET xp = xp + ${entry.xp} WHERE id = ${entry.player} RETURNING xp`;
     return player.xp as number;
   });
@@ -300,10 +310,12 @@ export async function recordRace(
   await ready;
   return db.begin(async (tx) => {
     const at = Date.now();
+    if (!(await insertAttempt(tx, { ...entry, mode: entry.mode ?? "multiplayer", seed: entry.seed ?? 0, durationMs: entry.durationMs ?? 0 }, at))) {
+      return playerXp(tx, entry.player);
+    }
     await tx`
       INSERT INTO races (player_id, difficulty, wpm, accuracy, won, xp, at)
       VALUES (${entry.player}, ${entry.difficulty}, ${entry.wpm}, ${entry.accuracy}, ${entry.won ? 1 : 0}, ${entry.xp}, ${at})`;
-    await insertAttempt(tx, { ...entry, mode: entry.mode ?? "multiplayer", seed: entry.seed ?? 0, durationMs: entry.durationMs ?? 0 }, at);
     const [player] = await tx`UPDATE players SET xp = xp + ${entry.xp} WHERE id = ${entry.player} RETURNING xp`;
     return player.xp as number;
   });
