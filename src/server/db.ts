@@ -63,6 +63,7 @@ async function migrate() {
   const attemptColumnNames = new Set(attemptColumns.map((column) => column.name));
   if (!attemptColumnNames.has("run_id")) await db.unsafe("ALTER TABLE attempts ADD COLUMN run_id TEXT");
   if (!attemptColumnNames.has("text")) await db.unsafe("ALTER TABLE attempts ADD COLUMN text TEXT");
+  if (!attemptColumnNames.has("trace")) await db.unsafe("ALTER TABLE attempts ADD COLUMN trace TEXT");
   if (!attemptColumnNames.has("finished")) await db.unsafe("ALTER TABLE attempts ADD COLUMN finished INTEGER NOT NULL DEFAULT 1");
   await db.unsafe("UPDATE attempts SET run_id = 'legacy:' || id WHERE run_id IS NULL");
   await db.unsafe("CREATE UNIQUE INDEX IF NOT EXISTS attempts_by_run_id ON attempts (run_id)");

@@ -39,7 +39,7 @@ test("legacy attempt tables upgrade without losing races", async () => {
   await legacy.unsafe(`CREATE TABLE attempts (
     id INTEGER PRIMARY KEY, player_id TEXT NOT NULL REFERENCES players(id), mode TEXT NOT NULL, difficulty TEXT NOT NULL,
     seed BIGINT NOT NULL, challenge_key TEXT, wpm INTEGER NOT NULL, accuracy INTEGER NOT NULL, duration_ms INTEGER NOT NULL,
-    won INTEGER NOT NULL, xp INTEGER NOT NULL, first_key_ms INTEGER, trace TEXT, at BIGINT NOT NULL)`);
+    won INTEGER NOT NULL, xp INTEGER NOT NULL, first_key_ms INTEGER, at BIGINT NOT NULL)`);
   await legacy`INSERT INTO players (id, name, created_at) VALUES ('legacy', 'Legacy', 1)`;
   await legacy`INSERT INTO attempts
     (player_id, mode, difficulty, seed, wpm, accuracy, duration_ms, won, xp, at)
@@ -60,7 +60,7 @@ test("legacy attempt tables upgrade without losing races", async () => {
 
   const upgraded = new SQL(`sqlite://${path}`);
   const columns: { name: string }[] = await upgraded.unsafe("PRAGMA table_info(attempts)");
-  expect(columns.map((column) => column.name)).toEqual(expect.arrayContaining(["run_id", "text", "finished"]));
+  expect(columns.map((column) => column.name)).toEqual(expect.arrayContaining(["run_id", "text", "trace", "finished"]));
   const [attempt] = await upgraded`SELECT run_id, finished FROM attempts WHERE id = 1`;
   expect(attempt).toMatchObject({ run_id: "legacy:1", finished: 1 });
   await upgraded.close();
