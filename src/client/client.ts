@@ -72,7 +72,6 @@ let lastResult: Result | null = null;
 let leaderboardReady = false;
 
 const sessionId = crypto.randomUUID();
-const landedAt = performance.now();
 
 function track(name: string, detail?: string, elapsedMs?: number) {
   void fetch("/api/event", {
@@ -443,7 +442,7 @@ function renderFollow() {
 function onCountdown(nextRoster: Info[], ms: number, newText: string, nextDifficulty: Difficulty, nextMode?: unknown) {
   if (isRaceMode(nextMode)) mode = nextMode;
   finishTracked = false;
-  track("race_started", mode);
+  if (role === "play") track("race_started", mode);
   status = "countdown";
   enterRace(nextRoster, nextDifficulty);
   if (role === "play") {
@@ -693,7 +692,7 @@ function type(ch: string) {
   if (!acceptsInput || role !== "play" || self.finishedAt !== null || cars.get(me)?.place) return;
   if (!firstKeyTracked) {
     firstKeyTracked = true;
-    track("first_keystroke", mode, Math.round(performance.now() - landedAt));
+    track("first_keystroke", mode, Math.round(performance.now()));
   }
   const before = self.typed;
   applyKey(text, self, ch, Date.now());
