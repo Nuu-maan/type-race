@@ -7,6 +7,7 @@ import { generateText } from "../shared/words";
 
 function connect() {
   if (process.env.DATABASE_URL) return new SQL(process.env.DATABASE_URL, { prepare: false });
+  if (process.env.RENDER === "true") throw new Error("DATABASE_URL is required on Render");
   const path = process.env.DB_PATH ?? "data/type-race.sqlite";
   if (path === ":memory:") return new SQL(":memory:");
   mkdirSync(dirname(path), { recursive: true });

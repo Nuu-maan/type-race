@@ -4,6 +4,17 @@ import { dayKey } from "../shared/challenge";
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? ":memory:";
 const { bestGhost, competitions, dailyChallenge, databaseReady, ensurePlayer, getProfile, leaderboard, logEvent, recordAttempt, recordRace, setCar } = await import("./db");
 
+test("Render refuses disposable database storage", async () => {
+  const child = Bun.spawn([process.execPath, "-e", "await import('./src/server/db.ts')"], {
+    cwd: `${import.meta.dir}/../..`,
+    env: { ...process.env, DATABASE_URL: "", RENDER: "true" },
+    stdout: "ignore",
+    stderr: "pipe",
+  });
+  expect(await child.exited).not.toBe(0);
+  expect(await new Response(child.stderr).text()).toContain("DATABASE_URL is required on Render");
+});
+
 test("database readiness and daily text are stable", async () => {
   expect(await databaseReady()).toBe(true);
   const now = Date.UTC(2026, 9, 16, 10);
