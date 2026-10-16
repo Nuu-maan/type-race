@@ -87,8 +87,8 @@ export function createRace(
   players: { id: string; name: string }[],
   now: number,
   difficulty: Difficulty = "normal",
+  text = generateText(seed, difficulty),
 ): Race {
-  const text = generateText(seed, difficulty);
   return {
     text,
     difficulty,
