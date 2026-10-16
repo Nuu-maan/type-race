@@ -36,6 +36,7 @@ const COUNTDOWN_MS = 3000;
 const TICK_MS = 50;
 const PLAYER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_SPECTATORS = 50;
+const RECONNECT_MS = 8000;
 const ROOM_IDLE_MS = Number(process.env.ROOM_IDLE_MS ?? 10 * 60_000);
 
 type Status = "lobby" | "countdown" | "racing" | "finished";
@@ -55,6 +56,7 @@ type SocketData = {
   rate: InputRate;
   controlRate: InputRate;
   eligible: boolean;
+  resume: string;
 };
 type Socket = ServerWebSocket<SocketData>;
 
@@ -76,11 +78,13 @@ type Room = {
   traces: Map<string, RaceTrace>;
   runId: string;
   settling: boolean;
+  final: object | null;
   timer: Timer | null;
   active: number;
 };
 
 const rooms = new Map<string, Room>();
+const reconnects = new Map<string, { room: string; player: string; timer: Timer }>();
 
 function createRoom(code: string, host: string, mode: RaceMode): Room {
   return {
@@ -99,6 +103,7 @@ function createRoom(code: string, host: string, mode: RaceMode): Room {
     traces: new Map(),
     runId: crypto.randomUUID(),
     settling: false,
+    final: null,
     timer: null,
     active: Date.now(),
   };
@@ -297,13 +302,14 @@ async function finish(room: Room, forfeit = false) {
   const progress = forfeit ? {} : await award(room, rows);
   room.status = "finished";
   room.settling = false;
-  broadcast(room, {
+  room.final = {
     t: "finish",
     winner,
     forfeit,
     results: rows,
     progress,
-  });
+  };
+  broadcast(room, room.final);
 }
 
 function startTimer(room: Room) {
@@ -390,6 +396,7 @@ function resetRoom(room: Room) {
   room.traces.clear();
   room.runId = crypto.randomUUID();
   room.settling = false;
+  room.final = null;
   for (const member of room.members) {
     member.data.firstKeyAt = null;
     member.data.eligible = true;
@@ -408,26 +415,18 @@ async function rearmSolo(room: Room) {
   }
 }
 
-function leave(ws: Socket) {
-  const room = rooms.get(ws.data.code);
-  if (!room) return;
-  if (ws.data.role === "watch") {
-    room.watchers = room.watchers.filter((w) => w !== ws);
-    broadcast(room, roomInfo(room));
-    return;
-  }
-  if (room.settling) return;
-  room.members = room.members.filter((m) => m !== ws);
+function removeMember(room: Room, id: string) {
+  room.members = room.members.filter((member) => member.data.id !== id);
   if (!room.members.length) {
     stopTimer(room);
     rooms.delete(room.code);
     for (const w of room.watchers) w.close(4005, "Everyone left this race. Pick another from Live races.");
     return;
   }
-  if (room.host === ws.data.id) room.host = room.members[0]!.data.id;
+  if (room.host === id) room.host = room.members[0]!.data.id;
   const racing = room.status === "countdown" || room.status === "racing";
   if (racing && room.race) {
-    const player = room.race.players.find((p) => p.id === ws.data.id);
+    const player = room.race.players.find((candidate) => candidate.id === id);
     if (player) {
       player.left = true;
       player.speed = 0;
@@ -436,6 +435,28 @@ function leave(ws: Socket) {
     if (active.length < MIN_RACERS && !room.race.winner) void finish(room, true);
   }
   broadcast(room, roomInfo(room));
+}
+
+function leave(ws: Socket) {
+  const room = rooms.get(ws.data.code);
+  if (!room) return;
+  if (ws.data.role === "watch") {
+    room.watchers = room.watchers.filter((watcher) => watcher !== ws);
+    broadcast(room, roomInfo(room));
+    return;
+  }
+  if (room.status === "countdown" || room.status === "racing" || room.status === "finished" || room.settling) {
+    const existing = reconnects.get(ws.data.resume);
+    if (existing) clearTimeout(existing.timer);
+    const timer = setTimeout(() => {
+      reconnects.delete(ws.data.resume);
+      const current = rooms.get(room.code);
+      if (current?.members.some((member) => member.data.id === ws.data.id)) removeMember(current, ws.data.id);
+    }, RECONNECT_MS);
+    reconnects.set(ws.data.resume, { room: room.code, player: ws.data.id, timer });
+    return;
+  }
+  removeMember(room, ws.data.id);
 }
 
 function watch(ws: Socket) {
@@ -509,7 +530,54 @@ function hostName(code: string) {
   return room?.members.find((m) => m.data.id === room.host)?.data.name;
 }
 
+function resumeSocket(ws: Socket) {
+  const pending = reconnects.get(ws.data.resume);
+  if (!pending) return false;
+  const room = rooms.get(pending.room);
+  const index = room?.members.findIndex((member) => member.data.id === pending.player) ?? -1;
+  if (!room || index < 0) {
+    clearTimeout(pending.timer);
+    reconnects.delete(ws.data.resume);
+    return false;
+  }
+  const previous = room.members[index]!;
+  clearTimeout(pending.timer);
+  reconnects.delete(ws.data.resume);
+  Object.assign(ws.data, previous.data);
+  room.members[index] = ws;
+  room.active = Date.now();
+  ws.subscribe(room.code);
+  send(ws, { t: "hello", you: ws.data.id, mode: room.mode, resume: ws.data.resume, reconnected: true });
+  const player = room.race?.players.find((candidate) => candidate.id === ws.data.id);
+  send(ws, {
+    t: "resume",
+    status: room.status,
+    mode: room.mode,
+    text: room.race?.text ?? "",
+    difficulty: room.difficulty,
+    roster: room.roster,
+    startsIn: Math.max(0, (room.race?.startedAt ?? 0) - Date.now()),
+    self: player ? {
+      typed: player.typed,
+      wordStart: player.wordStart,
+      extra: player.extra,
+      marks: Array.from(player.marks),
+      recent: player.recent,
+      totalKeys: player.totalKeys,
+      correctKeys: player.correctKeys,
+      streak: player.streak,
+      wordClean: player.wordClean,
+      finishedAt: player.finishedAt,
+    } : null,
+    players: room.race ? statePlayers(room, Date.now()) : [],
+    graceEndsAt: room.race?.firstFinishAt == null ? null : Math.max(0, room.race.firstFinishAt + FINISH_GRACE_MS - Date.now()),
+  });
+  if (room.final) send(ws, room.final);
+  return true;
+}
+
 async function join(ws: Socket) {
+  if (ws.data.role === "play" && resumeSocket(ws)) return;
   if (ws.data.role === "watch") return watch(ws);
   let room: Room | undefined;
   if (ws.data.mode !== "multiplayer") {
@@ -536,7 +604,7 @@ async function join(ws: Socket) {
   room.members.push(ws);
   room.active = Date.now();
   ws.subscribe(room.code);
-  send(ws, { t: "hello", you: ws.data.id, mode: room.mode });
+  send(ws, { t: "hello", you: ws.data.id, mode: room.mode, resume: ws.data.resume });
   if (ws.data.pid) {
     try {
       const profile = await ensurePlayer(ws.data.pid, ws.data.name, fallback.paint);
@@ -623,6 +691,7 @@ export const server = Bun.serve({
     const requestedMode = url.searchParams.get("mode");
     const mode = role === "watch" ? "multiplayer" : isRaceMode(requestedMode) ? requestedMode : "multiplayer";
     const session = url.searchParams.get("sid") ?? "";
+    const resume = url.searchParams.get("resume") ?? "";
     const now = Date.now();
     const data: SocketData = {
       id: crypto.randomUUID(),
@@ -639,6 +708,7 @@ export const server = Bun.serve({
       rate: inputRate(now),
       controlRate: inputRate(now),
       eligible: true,
+      resume: PLAYER_ID.test(resume) ? resume : crypto.randomUUID(),
     };
     return server.upgrade(req, { data }) ? undefined : new Response("Expected a WebSocket", { status: 400 });
   },
