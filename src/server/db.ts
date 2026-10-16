@@ -215,9 +215,10 @@ async function insertAttempt(tx: SQL, entry: AttemptEntry, at: number) {
 
 export async function recordAttempt(entry: AttemptEntry) {
   await ready;
-  await db.begin(async (tx) => {
+  return db.begin(async (tx) => {
     await insertAttempt(tx, entry, Date.now());
-    await tx`UPDATE players SET xp = xp + ${entry.xp} WHERE id = ${entry.player}`;
+    const [player] = await tx`UPDATE players SET xp = xp + ${entry.xp} WHERE id = ${entry.player} RETURNING xp`;
+    return player.xp as number;
   });
 }
 
@@ -225,13 +226,14 @@ export async function recordRace(
   entry: Omit<AttemptEntry, "mode" | "seed" | "durationMs"> & { mode?: RaceMode; seed?: number; durationMs?: number },
 ) {
   await ready;
-  await db.begin(async (tx) => {
+  return db.begin(async (tx) => {
     const at = Date.now();
     await tx`
       INSERT INTO races (player_id, difficulty, wpm, accuracy, won, xp, at)
       VALUES (${entry.player}, ${entry.difficulty}, ${entry.wpm}, ${entry.accuracy}, ${entry.won ? 1 : 0}, ${entry.xp}, ${at})`;
     await insertAttempt(tx, { ...entry, mode: entry.mode ?? "multiplayer", seed: entry.seed ?? 0, durationMs: entry.durationMs ?? 0 }, at);
-    await tx`UPDATE players SET xp = xp + ${entry.xp} WHERE id = ${entry.player}`;
+    const [player] = await tx`UPDATE players SET xp = xp + ${entry.xp} WHERE id = ${entry.player} RETURNING xp`;
+    return player.xp as number;
   });
 }
 

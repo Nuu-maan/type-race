@@ -24,6 +24,24 @@ test("races add xp, stats and leaderboard rows", async () => {
   expect(await leaderboard("easy")).toHaveLength(0);
 });
 
+test("race writes return authoritative xp", async () => {
+  await ensurePlayer("xp", "XP", "violet");
+  const first = await recordRace({ player: "xp", difficulty: "normal", wpm: 50, accuracy: 100, won: false, xp: 60 });
+  const second = await recordAttempt({
+    player: "xp",
+    mode: "practice",
+    difficulty: "normal",
+    seed: 1,
+    wpm: 50,
+    accuracy: 100,
+    durationMs: 60_000,
+    won: true,
+    xp: 30,
+  });
+  expect(first).toBe(60);
+  expect(second).toBe(90);
+});
+
 test("locked cars are refused", async () => {
   await ensurePlayer("c", "New", "cobalt");
   expect(await setCar("c", { paint: "gold", body: "gt" })).toBe(false);
