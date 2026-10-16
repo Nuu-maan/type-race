@@ -28,7 +28,7 @@ export function challengeSeed(key: string) {
 }
 
 export function nextWpmTarget(bestWpm: number) {
-  return Math.max(40, Math.ceil((bestWpm + 1) / 5) * 5);
+  return Math.min(200, Math.max(20, Math.ceil((bestWpm + 1) / 5) * 5));
 }
 
 export function tracePosition(trace: RaceTrace, elapsedMs: number) {

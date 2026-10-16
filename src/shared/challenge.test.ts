@@ -19,9 +19,10 @@ test("weekly competition starts on Monday UTC", () => {
 test("race modes and personal targets stay bounded", () => {
   expect(isRaceMode("ghost")).toBe(true);
   expect(isRaceMode("ranked")).toBe(false);
-  expect(nextWpmTarget(0)).toBe(40);
+  expect(nextWpmTarget(0)).toBe(20);
   expect(nextWpmTarget(59)).toBe(60);
   expect(nextWpmTarget(60)).toBe(65);
+  expect(nextWpmTarget(200)).toBe(200);
 });
 
 test("ghost traces interpolate and stop at their last position", () => {
