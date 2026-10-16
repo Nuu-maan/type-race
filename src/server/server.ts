@@ -37,7 +37,7 @@ const PLAYER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
 const MAX_SPECTATORS = 50;
 const RECONNECT_MS = FINISH_GRACE_MS + 1000;
 const EVENT_WINDOW_MS = 60_000;
-const MAX_EVENTS_PER_WINDOW = 30;
+const MAX_EVENTS_PER_WINDOW = 60;
 const ROOM_IDLE_MS = Number(process.env.ROOM_IDLE_MS ?? 10 * 60_000);
 const production = process.env.NODE_ENV === "production";
 const clientDirectory = `${import.meta.dir}/../../dist/client`;
@@ -647,6 +647,11 @@ function acceptEvent(client: string, now = Date.now()) {
   return true;
 }
 
+function forwardedClient(req: Request) {
+  if (process.env.RENDER !== "true") return null;
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+}
+
 async function eventResponse(req: Request, client: string) {
   if (!acceptEvent(client)) return new Response("Too many events", { status: 429, headers: { "retry-after": "60" } });
   if (Number(req.headers.get("content-length") ?? 0) > 1024) return new Response("Event too large", { status: 413 });
@@ -706,7 +711,7 @@ export const server = Bun.serve({
       const id = new URL(req.url).searchParams.get("id") ?? "";
       return Response.json(await competitions(PLAYER_ID.test(id) ? id : undefined).catch(() => ({ daily: null, weekly: null })));
     },
-    "/api/event": { POST: (req, server) => eventResponse(req, server.requestIP(req)?.address ?? "unknown") },
+    "/api/event": { POST: (req, server) => eventResponse(req, forwardedClient(req) ?? server.requestIP(req)?.address ?? "unknown") },
     "/api/profile": async (req) => {
       const id = new URL(req.url).searchParams.get("id") ?? "";
       return Response.json(PLAYER_ID.test(id) ? await getProfile(id).catch(() => null) : null);
