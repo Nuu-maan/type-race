@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 COPY . .
+RUN bun run build
 RUN mkdir -p /data
 ENV NODE_ENV=production PORT=8080 DB_PATH=/data/type-race.sqlite
 EXPOSE 8080

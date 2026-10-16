@@ -2,6 +2,7 @@ import { DIFFICULTY, type Difficulty } from "./progress";
 import { generateText } from "./words";
 
 export const TRACK = 1000;
+export const METERS_PER_UNIT = 2;
 export const UNITS_PER_WPM = TRACK / 3600;
 export const WPM_WINDOW_MS = 3000;
 export const MAX_WPM = 200;
@@ -87,8 +88,8 @@ export function createRace(
   players: { id: string; name: string }[],
   now: number,
   difficulty: Difficulty = "normal",
+  text = generateText(seed, difficulty),
 ): Race {
-  const text = generateText(seed, difficulty);
   return {
     text,
     difficulty,
@@ -225,7 +226,7 @@ export function results(race: Race, now: number) {
       place: i + 1,
       finished: p.finishedAt !== null,
       left: p.left,
-      wpm: Math.round(correctChars / 5 / Math.max(minutes, 1 / 60)),
+      wpm: Math.min(MAX_WPM, Math.round(correctChars / 5 / Math.max(minutes, 1 / 60))),
       accuracy: p.totalKeys ? Math.round((p.correctKeys / p.totalKeys) * 100) : 100,
       time: Math.round(minutes * 600) / 10,
       pos: p.pos,

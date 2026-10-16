@@ -62,8 +62,12 @@ export function placeBonus(place: number, racers: number) {
   return place === 1 || place < racers ? (PLACE_BONUS[place - 1] ?? 0) : 0;
 }
 
+export function effortXp(wpm: number, accuracy: number, difficulty: Difficulty) {
+  return Math.round((10 + wpm * (accuracy / 100)) * DIFFICULTY[difficulty].xp);
+}
+
 export function raceXp(wpm: number, accuracy: number, difficulty: Difficulty, place: number, racers: number) {
-  return Math.round((10 + wpm * (accuracy / 100)) * DIFFICULTY[difficulty].xp + placeBonus(place, racers));
+  return effortXp(wpm, accuracy, difficulty) + placeBonus(place, racers);
 }
 
 export function paintById(id: string) {

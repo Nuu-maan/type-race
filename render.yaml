@@ -4,5 +4,8 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    healthCheckPath: /api/live
+    healthCheckPath: /api/health
     autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false

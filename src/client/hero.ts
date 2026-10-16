@@ -1,32 +1,54 @@
 import { PAINTS } from "../shared/progress";
-import { createScene } from "./scene";
 import { $ } from "./ui";
 
 const SPEED = 36;
 const LOOP = 600;
 
 const canvas = $<HTMLCanvasElement>("hero-canvas");
-let scene: ReturnType<typeof createScene> | null = null;
+type HeroCar = { pos: number; body: string; speed: number; slip: boolean; nitro: boolean; name: string; color: string };
+type HeroScene = { render: (dt: number, cars: HeroCar[], meIndex: number) => void; resize: () => void; dispose: () => void };
+
+let scene: HeroScene | null = null;
+let loading: Promise<void> | null = null;
 let frame = 0;
+let loadTimer = 0;
 let visible = true;
 let active = false;
 let distance = 0;
 let time = 0;
+let resizeObserver: ResizeObserver | null = null;
 
-new IntersectionObserver(([entry]) => {
+const intersectionObserver = new IntersectionObserver(([entry]) => {
   visible = entry?.isIntersecting ?? true;
   if (visible && active) run();
-}).observe(canvas);
+  else cancelAnimationFrame(frame);
+});
+intersectionObserver.observe(canvas);
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) cancelAnimationFrame(frame);
+  else if (visible && active) run();
+});
 
 function run() {
   cancelAnimationFrame(frame);
+  if (!active || !visible || document.hidden || matchMedia("(max-width: 560px)").matches) return;
   if (!scene) {
-    try {
-      scene = createScene(canvas);
-      new ResizeObserver(() => scene?.resize()).observe(canvas);
-    } catch {
-      return;
+    if (!loading) {
+      loading = import("./scene")
+        .then(({ createScene }) => {
+          if (!active || !visible || document.hidden || matchMedia("(max-width: 560px)").matches) return;
+          scene = createScene(canvas);
+          resizeObserver = new ResizeObserver(() => scene?.resize());
+          resizeObserver.observe(canvas);
+          run();
+        })
+        .catch(() => {})
+        .finally(() => {
+          loading = null;
+        });
     }
+    return;
   }
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   let last = performance.now();
@@ -44,17 +66,24 @@ function run() {
       ],
       1,
     );
-    if (!still && visible && active) frame = requestAnimationFrame(loop);
+    if (!still && visible && active && !document.hidden) frame = requestAnimationFrame(loop);
   };
   frame = requestAnimationFrame(loop);
 }
 
 export function startHero() {
   active = true;
-  run();
+  clearTimeout(loadTimer);
+  if (matchMedia("(max-width: 560px)").matches) return;
+  loadTimer = window.setTimeout(run, 150);
 }
 
 export function stopHero() {
   active = false;
+  clearTimeout(loadTimer);
   cancelAnimationFrame(frame);
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  scene?.dispose();
+  scene = null;
 }

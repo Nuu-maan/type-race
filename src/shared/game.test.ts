@@ -152,10 +152,17 @@ test("hard races punish mistakes more than easy ones", () => {
   expect(hard.penalty).toBeGreaterThan(easy.penalty);
 });
 
+test("a saved challenge restores its original text", () => {
+  const race = createRace(1, [{ id: "a", name: "a" }], 0, "normal", "saved challenge text");
+  expect(race.text).toBe("saved challenge text");
+  expect(race.players[0]!.marks).toHaveLength(20);
+});
+
 test("speed is capped against key floods", () => {
   const { race, p } = solo();
-  drive(race, p, 500, 3, 0);
+  const now = drive(race, p, 500, 3, 0);
   expect(p.speed).toBeLessThanOrEqual(200 * (TRACK / 3600) * 1.25 + 0.01);
+  expect(results(race, now)[0]!.wpm).toBeLessThanOrEqual(200);
 });
 
 test("five racers finish in order and the race waits for stragglers", () => {

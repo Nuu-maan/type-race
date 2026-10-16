@@ -19,7 +19,7 @@
     <a class="skip" href="#main">Skip to content</a>
     <main id="main" class="wrap">
       <header class="bar">
-        <a class="brand" href="/">
+        <a class="brand" href="/" aria-label="type race home">
           <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
             <path d="M6 12h10M4 17h8M8 22h7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
             <rect x="17" y="13" width="11" height="8" rx="3" fill="var(--color-accent-solid)" />
@@ -28,17 +28,18 @@
         </a>
         <nav class="tabs" aria-label="Sections">
           <a href="/" data-view="lobby" aria-current="page">Play</a>
+          <a href="/?mode=daily" data-action="daily">Daily</a>
           <a href="/?view=live" data-view="live">Live races<span id="live-count" class="badge" hidden>0</span></a>
         </nav>
         <span id="crumb" class="crumb"></span>
         <div class="bar-end">
-          <div id="me-chip" class="me-chip" hidden>
+          <button id="me-chip" class="me-chip" type="button" aria-label="Open your profile" hidden>
             <span id="me-level" class="level">1</span>
             <span class="me-meta">
               <span id="me-name" class="me-name"></span>
               <span class="xp-bar"><span id="me-xp" class="xp-fill"></span></span>
             </span>
-          </div>
+          </button>
           <button id="mute" class="icon-btn" type="button">
             <svg class="on" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 7h2.5L9 4v10l-3.5-3H3z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="M12 6.5a3.5 3.5 0 0 1 0 5M14 4.5a6.5 6.5 0 0 1 0 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
             <svg class="off" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 7h2.5L9 4v10l-3.5-3H3z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m12 7 4 4m0-4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>
@@ -50,24 +51,44 @@
         <div class="hero">
           <canvas id="hero-canvas" aria-hidden="true"></canvas>
           <div class="hero-content">
-            <p class="eyebrow">2 to 5 racers · same words · one track</p>
+            <p class="eyebrow">Practice solo · race friends · improve daily</p>
             <h1>Type fast.<br />Drive fast.</h1>
-            <p class="lede">Race a friend in real time. Your typing speed is your car's speed.</p>
-            <label class="field-label" for="name">Racer name</label>
-            <form id="lobby-form" class="field">
-              <input id="name" name="nickname" placeholder="e.g. Numan" maxlength="16" autocomplete="nickname" spellcheck="false" />
-              <button id="lobby-btn" class="btn primary" type="submit">Create room</button>
-            </form>
+            <p class="lede">Your typing speed drives the car. Start alone now, then come back to beat your best.</p>
+            <div class="hero-actions">
+              <button id="practice" class="btn primary hero-primary" type="button">Practice now</button>
+              <button id="daily" class="btn hero-secondary" type="button">Today's challenge</button>
+            </div>
+            <p class="start-note">No sign-up. The clock starts with your first key.</p>
+            <details class="friend-race">
+              <summary>Create a friend race</summary>
+              <label class="field-label" for="name">Racer name</label>
+              <form id="lobby-form" class="field">
+                <input id="name" name="nickname" placeholder="e.g. Numan" maxlength="16" autocomplete="nickname" spellcheck="false" />
+                <button id="lobby-btn" class="btn" type="submit">Create a room</button>
+              </form>
+            </details>
             <p id="lobby-error" class="error" role="alert"></p>
           </div>
         </div>
 
+        <section id="return-card" class="return-card" aria-labelledby="return-title" hidden>
+          <div>
+            <p class="eyebrow">Your next lap</p>
+            <h2 id="return-title">Keep your momentum</h2>
+            <p id="return-summary" class="hint"></p>
+          </div>
+          <div class="return-actions">
+            <button id="home-ghost" class="btn primary" type="button">Race your best</button>
+            <button id="home-profile" class="btn" type="button">View progress</button>
+          </div>
+        </section>
+
         <section class="section" aria-labelledby="how-title">
           <h2 id="how-title">How it plays</h2>
           <ol class="steps">
-            <li><span class="step-n">1</span><h3>Open a room</h3><p>Pick a name and create a room. You're the host.</p></li>
-            <li><span class="step-n">2</span><h3>Send the link</h3><p>Up to four friends join from their own devices. Start unlocks at two racers.</p></li>
-            <li><span class="step-n">3</span><h3>Type to drive</h3><p>Everyone gets the same words. Type faster, go faster.</p></li>
+            <li><span class="step-n">1</span><h3>Start typing</h3><p>Practice immediately. Your first key starts the clock.</p></li>
+            <li><span class="step-n">2</span><h3>Set a record</h3><p>See your speed, accuracy, goals and recent races.</p></li>
+            <li><span class="step-n">3</span><h3>Beat yourself</h3><p>Race your personal-best ghost or take the same daily challenge.</p></li>
           </ol>
           <div class="rules">
             <div class="rule">
@@ -111,10 +132,22 @@
           </div>
           <a class="btn primary" href="/">Start a race</a>
         </div>
-        <ol id="live-list" class="live-list" aria-live="polite"></ol>
+        <ol id="live-list" class="live-list"></ol>
       </section>
 
-      <section id="room" class="screen" hidden>
+      <section id="profile" class="screen profile-screen" hidden aria-labelledby="profile-title">
+        <div class="section-head profile-head">
+          <div>
+            <p class="eyebrow">Your progress</p>
+            <h1 id="profile-title" class="page-title">Driver profile</h1>
+            <p class="hint">Records stay in this browser profile.</p>
+          </div>
+        </div>
+        <p id="profile-status" class="hint" role="status">Loading your progress…</p>
+        <div id="profile-dashboard"></div>
+      </section>
+
+      <section id="room" class="screen" hidden aria-labelledby="room-title">
         <div class="room-grid">
           <div class="garage">
             <canvas id="garage-canvas" class="garage-canvas" tabindex="0" aria-label="Your car. Drag or use the arrow keys to turn it."></canvas>
@@ -168,6 +201,7 @@
       </section>
 
       <section id="race" class="screen" hidden>
+        <h1 id="race-title" class="sr-only">Typing race</h1>
         <div class="stage track-stage">
           <canvas id="track" aria-label="race track"></canvas>
           <div class="hud">
@@ -217,6 +251,7 @@
           <div class="card" role="dialog" aria-modal="true" aria-labelledby="finish-title" tabindex="-1">
             <h2 id="finish-title"></h2>
             <p id="finish-sub" class="hint"></p>
+            <p id="finish-highlight" class="finish-highlight" role="status" hidden></p>
             <div id="finish-rows" class="rows"></div>
             <div id="finish-xp" class="finish-xp" hidden>
               <div class="xp-line">
@@ -228,6 +263,9 @@
             </div>
             <div class="finish-actions">
               <button id="rematch" class="btn primary" type="button">Race again</button>
+              <button id="race-best" class="btn primary" type="button">Race your best</button>
+              <button id="share-result" class="btn" type="button">Share result</button>
+              <button id="to-profile" class="btn" type="button">View profile</button>
               <a id="to-live" class="btn primary" href="/?view=live" hidden>Watch another race</a>
               <button id="to-menu" class="btn" type="button">Back to menu</button>
             </div>

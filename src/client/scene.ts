@@ -5,9 +5,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { TRACK } from "../shared/game";
-
-export const METERS_PER_UNIT = 2;
+import { METERS_PER_UNIT, TRACK } from "../shared/game";
 
 export type SceneCar = {
   pos: number;
@@ -418,6 +416,26 @@ function makeCar(color: string, bodyId: string) {
 
 type Car = ReturnType<typeof makeCar> & { label: THREE.Sprite | null; labelText: string; key: string };
 
+function disposeObject(root: THREE.Object3D) {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  const textures = new Set<THREE.Texture>();
+  root.traverse((object) => {
+    if (object instanceof THREE.Mesh || object instanceof THREE.Line || object instanceof THREE.Points) geometries.add(object.geometry);
+    const material = (object as THREE.Mesh).material;
+    if (material) for (const item of Array.isArray(material) ? material : [material]) materials.add(item);
+  });
+  for (const material of materials) {
+    for (const value of Object.values(material)) if (value instanceof THREE.Texture) textures.add(value);
+    if (material instanceof THREE.ShaderMaterial) {
+      for (const uniform of Object.values(material.uniforms)) if (uniform.value instanceof THREE.Texture) textures.add(uniform.value);
+    }
+  }
+  for (const texture of textures) texture.dispose();
+  for (const material of materials) material.dispose();
+  for (const geometry of geometries) geometry.dispose();
+}
+
 export function createScene(canvas: HTMLCanvasElement) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -426,7 +444,11 @@ export function createScene(canvas: HTMLCanvasElement) {
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(FOG, FOG_NEAR, FOG_FAR);
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const roomEnvironment = new RoomEnvironment();
+  const environment = pmrem.fromScene(roomEnvironment, 0.04);
+  roomEnvironment.dispose();
+  pmrem.dispose();
+  scene.environment = environment.texture;
   scene.environmentIntensity = 0.35;
 
   const camera = new THREE.PerspectiveCamera(60, 2, 0.1, 4000);
@@ -539,7 +561,8 @@ export function createScene(canvas: HTMLCanvasElement) {
 
   function gantry(label: string, checker: boolean) {
     const g = new THREE.Group();
-    const banner = new THREE.MeshStandardMaterial({ map: bannerTexture(label, checker), emissive: "#ffffff", emissiveMap: bannerTexture(label, checker), emissiveIntensity: 0.6 });
+    const texture = bannerTexture(label, checker);
+    const banner = new THREE.MeshStandardMaterial({ map: texture, emissive: "#ffffff", emissiveMap: texture, emissiveIntensity: 0.6 });
     const beam = new THREE.Mesh(new THREE.BoxGeometry(ROAD_W + 5, 1.5, 0.5), [postMat, postMat, postMat, postMat, banner, banner]);
     beam.position.y = 7.2;
     g.add(beam);
@@ -571,12 +594,16 @@ export function createScene(canvas: HTMLCanvasElement) {
     list.forEach((spec, i) => {
       const key = `${spec.color}/${spec.body}`;
       if (cars[i]?.key === key) return;
+      if (cars[i]) disposeObject(cars[i].car);
       cars[i]?.car.removeFromParent();
       const c = makeCar(spec.color, spec.body);
       scene.add(c.car);
       cars[i] = { ...c, label: null, labelText: "", key };
     });
-    for (const extra of cars.splice(list.length)) extra.car.removeFromParent();
+    for (const extra of cars.splice(list.length)) {
+      disposeObject(extra.car);
+      extra.car.removeFromParent();
+    }
   }
 
   const SPEED_LINES = 90;
@@ -612,7 +639,8 @@ export function createScene(canvas: HTMLCanvasElement) {
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.4, 0.9);
   composer.addPass(bloom);
-  composer.addPass(new OutputPass());
+  const output = new OutputPass();
+  composer.addPass(output);
 
   let fov = 60;
   let time = 0;
@@ -632,6 +660,7 @@ export function createScene(canvas: HTMLCanvasElement) {
   }
 
   function render(dt: number, list: SceneCar[], meIndex: number) {
+    if (document.hidden) return;
     time += dt;
     ensureCars(list);
     const me = list[meIndex] ?? list[0];
@@ -679,6 +708,7 @@ export function createScene(canvas: HTMLCanvasElement) {
       }
       if (i !== meIndex && car.labelText !== c.name) {
         car.labelText = c.name;
+        if (car.label) disposeObject(car.label);
         car.label?.removeFromParent();
         car.label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTexture(c.name), depthWrite: false, fog: false }));
         car.label.scale.set(4, 1, 1);
@@ -724,8 +754,17 @@ export function createScene(canvas: HTMLCanvasElement) {
     composer.render(dt);
   }
 
+  function dispose() {
+    disposeObject(scene);
+    environment.dispose();
+    bloom.dispose();
+    output.dispose();
+    composer.dispose();
+    renderer.dispose();
+  }
+
   resize();
-  return { render, resize };
+  return { render, resize, dispose };
 }
 
 export function createGarage(canvas: HTMLCanvasElement) {
@@ -733,7 +772,11 @@ export function createGarage(canvas: HTMLCanvasElement) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const roomEnvironment = new RoomEnvironment();
+  const environment = pmrem.fromScene(roomEnvironment, 0.04);
+  roomEnvironment.dispose();
+  pmrem.dispose();
+  scene.environment = environment.texture;
   scene.environmentIntensity = 0.5;
   scene.add(new THREE.HemisphereLight("#8f74e0", "#140b1e", 1.2));
   const key = new THREE.DirectionalLight("#ffffff", 1.6);
@@ -768,11 +811,22 @@ export function createGarage(canvas: HTMLCanvasElement) {
   let frame = 0;
   let running = false;
   let visible = true;
+  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+
+  const canAnimate = () => running && visible && !document.hidden && !reducedMotion.matches;
+
+  function refresh() {
+    cancelAnimationFrame(frame);
+    if (!running || !visible || document.hidden) return;
+    if (reducedMotion.matches) draw(0);
+    else loop();
+  }
 
   function setCar(color: string, body: string) {
     const nextKey = `${color}/${body}`;
     if (nextKey === currentKey) return;
     currentKey = nextKey;
+    if (current) disposeObject(current.car);
     current?.car.removeFromParent();
     current = makeCar(color, body);
     current.beam.visible = false;
@@ -780,7 +834,7 @@ export function createGarage(canvas: HTMLCanvasElement) {
     scene.add(current.car);
     current.car.scale.setScalar(0.92);
     current.car.userData.pop = 1;
-    if (running) loop();
+    if (running) refresh();
   }
 
   function resize() {
@@ -798,6 +852,7 @@ export function createGarage(canvas: HTMLCanvasElement) {
   }
 
   function draw(dt: number) {
+    if (document.hidden) return;
     if (!dragging) {
       angle += velocity * dt;
       velocity += (spin - velocity) * Math.min(1, dt * 1.5);
@@ -816,54 +871,79 @@ export function createGarage(canvas: HTMLCanvasElement) {
   let last = 0;
   function loop() {
     cancelAnimationFrame(frame);
+    if (!canAnimate()) return;
     last = performance.now();
     const step = (now: number) => {
       draw(Math.min(0.1, (now - last) / 1000));
       last = now;
-      if (running && visible) frame = requestAnimationFrame(step);
+      if (canAnimate()) frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
   }
 
-  canvas.addEventListener("pointerdown", (e) => {
+  const pointerdown = (e: PointerEvent) => {
     dragging = true;
     lastX = e.clientX;
     canvas.setPointerCapture(e.pointerId);
-  });
-  canvas.addEventListener("pointermove", (e) => {
+  };
+  const pointermove = (e: PointerEvent) => {
     if (!dragging) return;
     const dx = e.clientX - lastX;
     lastX = e.clientX;
     angle += dx * 0.012;
     velocity = dx * 0.6;
-  });
-  canvas.addEventListener("keydown", (e) => {
+    if (!canAnimate()) draw(0);
+  };
+  const keydown = (e: KeyboardEvent) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
     angle += e.key === "ArrowLeft" ? -0.35 : 0.35;
     velocity = 0;
-    if (!running) draw(0);
-  });
+    if (!canAnimate()) draw(0);
+  };
   const release = () => (dragging = false);
+  canvas.addEventListener("pointerdown", pointerdown);
+  canvas.addEventListener("pointermove", pointermove);
+  canvas.addEventListener("keydown", keydown);
   canvas.addEventListener("pointerup", release);
   canvas.addEventListener("pointercancel", release);
 
-  new IntersectionObserver(([entry]) => {
+  const intersectionObserver = new IntersectionObserver(([entry]) => {
     visible = entry?.isIntersecting ?? true;
-    if (visible && running) loop();
-  }).observe(canvas);
-  new ResizeObserver(resize).observe(canvas);
+    refresh();
+  });
+  intersectionObserver.observe(canvas);
+  const resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(canvas);
+  const visibilitychange = () => refresh();
+  document.addEventListener("visibilitychange", visibilitychange);
+  reducedMotion.addEventListener("change", refresh);
 
   return {
     setCar,
     start() {
       running = true;
-      if (matchMedia("(prefers-reduced-motion: reduce)").matches) spin = velocity = 0;
-      loop();
+      refresh();
     },
     stop() {
       running = false;
       cancelAnimationFrame(frame);
+    },
+    dispose() {
+      running = false;
+      cancelAnimationFrame(frame);
+      intersectionObserver.disconnect();
+      resizeObserver.disconnect();
+      document.removeEventListener("visibilitychange", visibilitychange);
+      reducedMotion.removeEventListener("change", refresh);
+      canvas.removeEventListener("pointerdown", pointerdown);
+      canvas.removeEventListener("pointermove", pointermove);
+      canvas.removeEventListener("keydown", keydown);
+      canvas.removeEventListener("pointerup", release);
+      canvas.removeEventListener("pointercancel", release);
+      disposeObject(scene);
+      environment.dispose();
+      renderer.dispose();
     },
   };
 }

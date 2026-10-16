@@ -1,12 +1,13 @@
-import { applyBackspace, applyKey, createPlayer, MARK_OK, TRACK, type Player } from "../shared/game";
+import { applyBackspace, applyKey, createPlayer, MARK_OK, METERS_PER_UNIT, TRACK, type Player } from "../shared/game";
+import { isRaceMode, type RaceMode } from "../shared/challenge";
+import { renderDashboard, type Competitions, type RecordEntry } from "./dashboard";
 import { renderGarage, startGarage, stopGarage } from "./garage";
 import { startHero, stopHero } from "./hero";
 import { ordinal, renderHud, renderWatchers, setHudPicker, standingsOf, type HudRacer } from "./hud";
 import { initLeaderboard, refreshLeaderboard } from "./leaderboard";
 import { initLive, showLive } from "./live";
-import { fetchProfile, playerId, renderMe } from "./profile";
+import { fetchProfile, playerId, renderMe, type Profile } from "./profile";
 import { DIFFICULTY, isDifficulty, levelProgress, MAX_RACERS, MIN_RACERS, paintById, type Car, type Difficulty } from "../shared/progress";
-import { createScene, METERS_PER_UNIT, type SceneCar } from "./scene";
 import {
   countSound,
   finishSound,
@@ -25,12 +26,13 @@ import { $, bindSeg, countUp, el, replay, setSegEnabled, swapLabel } from "./ui"
 type Info = { id: string; name: string; xp: number; level: number; car: Car };
 type Status = "lobby" | "countdown" | "racing" | "finished";
 type Role = "play" | "watch";
-type View = "lobby" | "live" | "room" | "race";
+type View = "lobby" | "live" | "profile" | "room" | "race";
 type CarState = { id: string; pos: number; speed: number; wpm: number; slip: boolean; nitro: boolean; place: number | null; left: boolean };
+type SceneCar = { pos: number; body: string; speed: number; slip: boolean; nitro: boolean; name: string; color: string };
 type Result = { id: string; name: string; place: number; finished: boolean; left: boolean; wpm: number; accuracy: number; time: number; pos: number };
-type Progress = { gained: number; xp: number; level: number; leveledUp: boolean; unlocked: string[] };
+type Progress = { gained: number; xp: number; level: number; leveledUp: boolean; unlocked: string[]; saved: boolean };
 
-const screens: Record<View, HTMLElement> = { lobby: $("lobby"), live: $("live"), room: $("room"), race: $("race") };
+const screens: Record<View, HTMLElement> = { lobby: $("lobby"), live: $("live"), profile: $("profile"), room: $("room"), race: $("race") };
 const nameInput = $<HTMLInputElement>("name");
 const ghost = $<HTMLInputElement>("ghost");
 const wordsEl = $("words");
@@ -39,10 +41,10 @@ const caret = $("caret");
 const canvas = $<HTMLCanvasElement>("track");
 const countdownEl = $("countdown");
 const MARK_CLASS = ["", "done", "wrong", "missed"];
-
 let ws: WebSocket | null = null;
 let role: Role = "play";
 let view: View = "lobby";
+let mode: RaceMode = "multiplayer";
 let me = "";
 let code = "";
 let host = "";
@@ -59,6 +61,26 @@ let letters: HTMLSpanElement[] = [];
 let cars = new Map<string, CarState & { shown: number; at: number }>();
 let graceEndsAt: number | null = null;
 let frame = 0;
+let profile: Profile | null = null;
+let resumeToken = "";
+let reconnectUntil = 0;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let connectionRoom = "";
+let firstKeyTracked = false;
+let finishTracked = false;
+let lastResult: Result | null = null;
+let leaderboardReady = false;
+
+const sessionId = crypto.randomUUID();
+
+function track(name: string, detail?: string, elapsedMs?: number) {
+  void fetch("/api/event", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ player: playerId, session: sessionId, name, detail, elapsedMs }),
+    keepalive: true,
+  }).catch(() => {});
+}
 
 const params = new URLSearchParams(location.search);
 const roomParam = params.get("room")?.toUpperCase() ?? "";
@@ -68,11 +90,15 @@ try {
   nameInput.value = localStorage.getItem("name") ?? "";
 } catch {}
 
-void fetchProfile().then((profile) => {
-  if (!profile) return;
-  if (!nameInput.value) nameInput.value = profile.name;
-  renderMe(profile.name, profile.xp);
+void fetchProfile().then((next) => {
+  if (!next) return;
+  profile = next;
+  if (!nameInput.value) nameInput.value = next.name;
+  renderMe(next.name, next.xp);
+  renderHomeProgress();
 });
+
+track("landing", params.get("mode") === "daily" ? "daily" : roomParam ? "room" : "direct", 0);
 
 function setCrumb(text: string) {
   $("crumb").textContent = text;
@@ -82,21 +108,32 @@ function show(next: View) {
   view = next;
   for (const [key, node] of Object.entries(screens)) node.hidden = key !== next;
   for (const tab of document.querySelectorAll<HTMLAnchorElement>(".tabs a")) {
-    const current = (tab.dataset.view === "live") === (next === "live");
+    const current = tab.dataset.action === "daily"
+      ? next === "race" && mode === "daily"
+      : tab.dataset.view === "live"
+        ? next === "live"
+        : next === "lobby" || (next === "race" && mode !== "daily");
     if (current) tab.setAttribute("aria-current", "page");
     else tab.removeAttribute("aria-current");
   }
   if (next === "lobby") startHero();
   else stopHero();
+  if (next !== "race") disposeRaceScene();
   if (next === "room" && role === "play") startGarage();
   else stopGarage();
   showLive(next === "live");
-  if (next === "lobby") void refreshLeaderboard();
+  if (next === "lobby") {
+    if (leaderboardReady) void refreshLeaderboard();
+    else {
+      leaderboardReady = true;
+      initLeaderboard();
+    }
+  }
 }
 
 function goLobby(message = "") {
   history.replaceState(null, "", "/");
-  $("lobby-btn").textContent = "Create room";
+  $("lobby-btn").textContent = "Create a room";
   setCrumb("");
   $("lobby-error").textContent = message;
   show("lobby");
@@ -109,7 +146,70 @@ function goLive(message = "") {
   if (message) $("live-list").before(Object.assign(el("p", "error fresh", message), { id: "live-error" }));
 }
 
+function renderHomeProgress() {
+  const card = $("return-card");
+  if (!profile?.races) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+  $("return-summary").textContent = `${profile.bestWpm} WPM best · ${profile.averageAccuracy}% average accuracy · ${profile.dailyStreak} day daily streak`;
+  const ghostButton = $("home-ghost");
+  ghostButton.hidden = !profile.ghostReady;
+  $("home-profile").classList.toggle("primary", !profile.ghostReady);
+}
+
+async function showProfile() {
+  if (!leaveRoom()) return;
+  role = "play";
+  history.replaceState(null, "", "/?view=profile");
+  setCrumb("your profile");
+  show("profile");
+  track("profile_viewed");
+  const statusNode = $("profile-status");
+  statusNode.hidden = false;
+  statusNode.textContent = "Loading your progress…";
+  try {
+    const [next, response] = await Promise.all([fetchProfile(), fetch(`/api/competitions?id=${playerId}`)]);
+    const competitionData = response.ok ? await response.json() : null;
+    if (!next) {
+      $("profile-dashboard").replaceChildren();
+      statusNode.textContent = "Finish a practice race to create your profile and first personal record.";
+      return;
+    }
+    if (!competitionData?.daily || !competitionData?.weekly) throw new Error("Competition data unavailable");
+    profile = next;
+    renderMe(next.name, next.xp);
+    renderHomeProgress();
+    renderDashboard($("profile-dashboard"), next, competitionData as Competitions, {
+      onPractice: () => startMode("practice"),
+      onDaily: () => startMode("daily"),
+      onGhost: () => startMode("ghost"),
+      onShare: shareRecord,
+    });
+    statusNode.hidden = true;
+  } catch {
+    statusNode.textContent = "Your progress could not load. Check your connection and try again.";
+  }
+}
+
+function startMode(nextMode: Exclude<RaceMode, "multiplayer">) {
+  if (!leaveRoom()) return;
+  role = "play";
+  mode = nextMode;
+  code = "";
+  lastResult = null;
+  history.replaceState(null, "", `/?mode=${nextMode}`);
+  setCrumb(nextMode === "daily" ? "today's challenge" : nextMode === "ghost" ? "personal best" : "practice");
+  unlockAudio();
+  connect("SOLO", "play", nextMode);
+}
+
 function leaveRoom() {
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  reconnectUntil = 0;
+  resumeToken = "";
   if (!ws) return true;
   if (role === "play" && (status === "racing" || status === "countdown") && !confirm("Leave this race? It counts as a loss for you.")) return false;
   const socket = ws;
@@ -124,7 +224,7 @@ function leaveRoom() {
 }
 
 function mine() {
-  return players.find((p) => p.id === me);
+  return roster.find((p) => p.id === me) ?? players.find((p) => p.id === me);
 }
 
 function infoOf(id: string) {
@@ -147,30 +247,40 @@ function watchUrl() {
   return `${location.origin}/?watch=${code}`;
 }
 
-function connect(room: string, as: Role) {
+function connect(room: string, as: Role, nextMode: RaceMode = "multiplayer", resume = "") {
   role = as;
+  mode = nextMode;
+  connectionRoom = room;
   const name = nameInput.value.trim();
-  if (as === "play") {
+  if (as === "play" && name) {
     try {
       localStorage.setItem("name", name);
     } catch {}
   }
   document.getElementById("live-error")?.remove();
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const query = new URLSearchParams({ room, name, pid: playerId, role: as });
+  const query = new URLSearchParams({ room, name, pid: playerId, role: as, mode: nextMode, sid: sessionId });
+  if (resume) query.set("resume", resume);
   const socket = new WebSocket(`${proto}://${location.host}/ws?${query}`);
   ws = socket;
   socket.onmessage = (e) => handle(JSON.parse(e.data));
   socket.onclose = (e) => {
     if (ws !== socket) return;
     ws = null;
+    const interrupted = as === "play" && Boolean(resumeToken) && (status === "racing" || status === "countdown") && (e.code === 1006 || !e.wasClean);
+    if (interrupted && !resume) reconnectUntil = Date.now() + 7500;
+    if (interrupted && Date.now() < reconnectUntil) {
+      countdownEl.replaceChildren(el("span", "reconnecting", "Reconnecting…"));
+      reconnectTimer = setTimeout(() => connect(connectionRoom || room, as, mode, resumeToken), 350);
+      return;
+    }
     stopEngine();
     cancelAnimationFrame(frame);
     status = "lobby";
     setResultsOpen(false);
     const reason = e.reason || (code ? "Connection to the room was lost. Open the link again to rejoin." : "Unable to reach the server. Check that it's running and try again.");
     if (as === "watch") goLive(reason);
-    else if (e.code === 4004 || e.code === 4003 || e.code === 4008) goLobby(reason);
+    else if (e.code === 4004 || e.code === 4003 || e.code === 4008 || e.code === 4010) goLobby(reason);
     else {
       show("lobby");
       $("lobby-error").textContent = reason;
@@ -179,9 +289,16 @@ function connect(room: string, as: Role) {
 }
 
 function handle(msg: any) {
-  if (msg.t === "hello") me = msg.you;
+  if (msg.t === "hello") {
+    me = msg.you;
+    if (isRaceMode(msg.mode)) mode = msg.mode;
+    if (typeof msg.resume === "string") {
+      resumeToken = msg.resume;
+    }
+  }
   else if (msg.t === "room") onRoom(msg);
-  else if (msg.t === "countdown") onCountdown(msg.roster, msg.ms, msg.text, msg.difficulty);
+  else if (msg.t === "countdown") onCountdown(msg.roster, msg.ms, msg.text, msg.difficulty, msg.mode);
+  else if (msg.t === "resume") onResume(msg);
   else if (msg.t === "sync") onSync(msg);
   else if (msg.t === "go") onGo();
   else if (msg.t === "state") onState(msg.players, msg.graceEndsAt);
@@ -193,6 +310,7 @@ const setDifficulty = bindSeg($("difficulty"), (value) => {
 });
 
 function onRoom(msg: { code: string; host: string; status: Status; difficulty: Difficulty; spectators: number; players: Info[] }) {
+  mode = "multiplayer";
   code = msg.code;
   host = msg.host;
   players = msg.players;
@@ -303,6 +421,7 @@ function enterRace(nextRoster: Info[], nextDifficulty: Difficulty) {
   $("keys-hint").hidden = watching;
   $("spectate-bar").hidden = !watching;
   $("finished-banner").hidden = true;
+  $("race-title").textContent = mode === "daily" ? "Today's typing challenge" : mode === "ghost" ? "Personal best typing race" : mode === "practice" ? "Typing practice" : "Typing race";
   setHudPicker(watching ? pickFollow : null);
   renderFollow();
   setResultsOpen(false);
@@ -320,18 +439,22 @@ function renderFollow() {
     : "Following the leader. Select a racer in the tower to follow them.";
 }
 
-function onCountdown(nextRoster: Info[], ms: number, newText: string, nextDifficulty: Difficulty) {
+function onCountdown(nextRoster: Info[], ms: number, newText: string, nextDifficulty: Difficulty, nextMode?: unknown) {
+  if (isRaceMode(nextMode)) mode = nextMode;
+  finishTracked = false;
+  if (role === "play") track("race_started", mode);
   status = "countdown";
   enterRace(nextRoster, nextDifficulty);
   if (role === "play") {
     text = newText;
-    self = createPlayer(me, nameOf(me), text.length);
+    self = createPlayer(me, nameOf(me), text.length, nextDifficulty);
     renderWords();
     wordsEl.classList.add("idle");
     ghost.focus();
   }
   const steps = Math.round(ms / 1000);
   for (let i = 0; i < steps; i++) setTimeout(() => flashCount(String(steps - i)), i * 1000);
+  if (steps === 0) countdownEl.replaceChildren(el("span", "ready-copy", "Start typing"));
   startLoop();
 }
 
@@ -342,6 +465,40 @@ function onSync(msg: { status: Status; difficulty: Difficulty; roster: Info[]; s
     const steps = Math.ceil(msg.startsIn / 1000);
     for (let i = 0; i < steps; i++) setTimeout(() => flashCount(String(steps - i)), msg.startsIn - (steps - i) * 1000);
   }
+  startLoop();
+}
+
+function onResume(msg: {
+  status: Status;
+  mode: RaceMode;
+  text: string;
+  difficulty: Difficulty;
+  roster: Info[];
+  startsIn: number;
+  self: Partial<Player> & { marks?: number[] } | null;
+  players: CarState[];
+  graceEndsAt: number | null;
+}) {
+  mode = msg.mode;
+  status = msg.status;
+  text = msg.text;
+  enterRace(msg.roster, msg.difficulty);
+  self = createPlayer(me, nameOf(me), text.length, msg.difficulty);
+  if (msg.self) {
+    const { marks, ...saved } = msg.self;
+    Object.assign(self, saved);
+    if (marks) self.marks.set(marks.slice(0, self.marks.length));
+  }
+  renderWords();
+  paint(0, self.typed);
+  onState(msg.players, msg.graceEndsAt, msg.status !== "countdown");
+  if (msg.status === "countdown") {
+    const steps = Math.ceil(msg.startsIn / 1000);
+    for (let i = 0; i < steps; i++) setTimeout(() => flashCount(String(steps - i)), Math.max(0, msg.startsIn - (steps - i) * 1000));
+  } else if (msg.status === "racing") {
+    startEngine();
+  }
+  ghost.focus();
   startLoop();
 }
 
@@ -359,9 +516,9 @@ function onGo() {
   }
 }
 
-function onState(list: CarState[], grace: number | null) {
+function onState(list: CarState[], grace: number | null, advance = true) {
   const now = performance.now();
-  if (status === "countdown") status = "racing";
+  if (advance && status === "countdown") status = "racing";
   graceEndsAt = grace === null ? null : now + grace;
   for (const s of list) {
     const car = cars.get(s.id);
@@ -394,7 +551,16 @@ function renderBanner(now: number) {
 
 function setResultsOpen(open: boolean) {
   $("finish").hidden = !open;
-  for (const node of [$("race").querySelector<HTMLElement>(".track-stage")!, wordsEl, $("race-tools"), $("spectate-bar"), document.querySelector<HTMLElement>(".bar")!]) {
+  const background = [
+    ghost,
+    document.querySelector<HTMLElement>(".skip")!,
+    $("race").querySelector<HTMLElement>(".track-stage")!,
+    wordsEl,
+    $("race-tools"),
+    $("spectate-bar"),
+    document.querySelector<HTMLElement>(".bar")!,
+  ];
+  for (const node of background) {
     node.inert = open;
   }
 }
@@ -406,12 +572,36 @@ function onFinish(winner: string | null, forfeit: boolean, results: Result[], pr
   stopEngine();
   $("finished-banner").hidden = true;
   const mineRow = results.find((r) => r.id === me);
+  const saved = mineRow ? progress[me] : undefined;
+  const previousBest = profile?.bestWpm ?? 0;
+  lastResult = mineRow ?? null;
+  if (role === "play" && !finishTracked) {
+    finishTracked = true;
+    track("race_completed", mode);
+  }
   if (role === "play") finishSound(mineRow?.place === 1);
-  $("finish-title").textContent =
-    role === "play" && mineRow ? (mineRow.place === 1 ? "You won" : `You finished ${ordinal(mineRow.place)}`) : `${nameOf(winner ?? "")} won`;
-  $("finish-sub").textContent = forfeit
-    ? "Everyone else left the race."
-    : `${DIFFICULTY[difficulty].label} race · ${results.filter((r) => !r.left).length} racers`;
+  $("finish-title").textContent = role !== "play" || !mineRow
+    ? `${nameOf(winner ?? "")} won`
+    : mode === "practice"
+      ? "Practice complete"
+      : mode === "daily"
+        ? "Daily challenge complete"
+        : mode === "ghost"
+          ? winner === me ? "You beat your best" : "Your best held on"
+          : mineRow.place === 1 ? "You won" : `You finished ${ordinal(mineRow.place)}`;
+  const modeLabel = mode === "daily" ? "Today's shared course" : mode === "ghost" ? "Personal best race" : mode === "practice" ? "Solo practice" : `${results.filter((r) => !r.left).length} racers`;
+  $("finish-sub").textContent = forfeit ? "Everyone else left the race." : `${DIFFICULTY[difficulty].label} · ${modeLabel}`;
+  const highlight = $("finish-highlight");
+  const isPersonalBest = Boolean(mineRow?.finished && saved?.saved && mineRow.wpm > previousBest);
+  highlight.hidden = false;
+  highlight.textContent = !saved?.saved && role === "play"
+    ? "This result could not be saved. Your stats and XP were not changed."
+    : isPersonalBest
+      ? `New personal best · ${mineRow!.wpm} WPM`
+      : mode === "ghost" && winner === me
+        ? "You are faster than your previous best."
+        : "";
+  highlight.hidden = !highlight.textContent;
   $("finish-rows").replaceChildren(
     ...results.map((r, i) => {
       const row = el("div", r.id === me ? "row me" : "row");
@@ -423,24 +613,42 @@ function onFinish(winner: string | null, forfeit: boolean, results: Result[], pr
         el("span", "place", ordinal(r.place)),
         swatch,
         el("strong", "", r.id === me ? `${r.name} (you)` : r.name),
-        el("span", "", `${r.wpm} wpm`),
-        el("span", "", `${r.accuracy}%`),
+        el("span", "wpm", `${r.wpm} wpm`),
+        el("span", "accuracy", `${r.accuracy}%`),
         el("span", "time", outcome),
       );
       return row;
     }),
   );
-  renderXp(role === "play" ? progress[me] : undefined);
-  $("rematch").hidden = role === "watch";
+  renderXp(role === "play" && mineRow?.finished ? saved : undefined);
+  const rematch = $("rematch");
+  rematch.hidden = role === "watch";
+  rematch.textContent = mode === "daily" ? "Try today again" : mode === "practice" ? "Practice again" : mode === "ghost" ? "Race again" : "Rematch";
+  const canRaceBest = role === "play" && Boolean(profile?.ghostReady || (mineRow?.finished && saved?.saved));
+  $("race-best").hidden = !canRaceBest;
+  $("share-result").hidden = role !== "play" || !mineRow;
+  $("to-profile").hidden = role !== "play";
+  const preferGhost = canRaceBest && mode === "practice" && isPersonalBest;
+  rematch.classList.toggle("primary", !preferGhost);
+  $("race-best").classList.toggle("primary", preferGhost);
   $("to-live").hidden = role !== "watch";
   setResultsOpen(true);
   $("finish").querySelector<HTMLElement>(".card")!.focus();
+  if (role === "play" && saved?.saved) {
+    void fetchProfile().then((next) => {
+      if (!next) return;
+      profile = next;
+      renderMe(next.name, next.xp);
+      renderHomeProgress();
+      $("race-best").hidden = !next.ghostReady;
+    });
+  }
 }
 
 function renderXp(p: Progress | undefined) {
   const box = $("finish-xp");
-  box.hidden = !p;
-  if (!p) return;
+  box.hidden = !p?.saved;
+  if (!p?.saved) return;
   const before = levelProgress(p.xp - p.gained);
   const after = levelProgress(p.xp);
   const fill = $("finish-xp-fill");
@@ -489,7 +697,12 @@ function paint(from: number, to: number) {
 }
 
 function type(ch: string) {
-  if (status !== "racing" || role !== "play" || self.finishedAt !== null || cars.get(me)?.place) return;
+  const acceptsInput = status === "racing" || (status === "countdown" && mode !== "multiplayer");
+  if (!acceptsInput || role !== "play" || self.finishedAt !== null || cars.get(me)?.place) return;
+  if (!firstKeyTracked) {
+    firstKeyTracked = true;
+    track("first_keystroke", mode, Math.round(performance.now()));
+  }
   const before = self.typed;
   applyKey(text, self, ch, Date.now());
   send({ t: "key", c: ch });
@@ -499,10 +712,11 @@ function type(ch: string) {
 }
 
 function backspace(wholeWord: boolean) {
-  if (status !== "racing" || role !== "play") return;
+  const acceptsInput = status === "racing" || (status === "countdown" && mode !== "multiplayer");
+  if (!acceptsInput || role !== "play") return;
   const before = self.typed;
   applyBackspace(self, wholeWord);
-  send({ t: "back", w: wholeWord });
+  send({ t: wholeWord ? "wordBack" : "back" });
   paint(self.typed, before);
 }
 
@@ -567,19 +781,37 @@ document.addEventListener("fullscreenchange", () => {
   refocus();
 });
 
-let scene: ReturnType<typeof createScene> | null = null;
+type RaceScene = { render: (dt: number, cars: SceneCar[], meIndex: number) => void; resize: () => void; dispose: () => void };
+
+let scene: RaceScene | null = null;
+let sceneLoading: Promise<void> | null = null;
+let sceneObserver: ResizeObserver | null = null;
 let hudFrame = 0;
 
 function getScene() {
-  if (!scene) {
-    try {
-      scene = createScene(canvas);
-      new ResizeObserver(() => scene?.resize()).observe(canvas);
-    } catch {
-      countdownEl.textContent = "This race needs WebGL.";
-    }
+  if (!scene && !sceneLoading) {
+    sceneLoading = import("./scene")
+      .then(({ createScene }) => {
+        if (view !== "race") return;
+        scene = createScene(canvas);
+        sceneObserver = new ResizeObserver(() => scene?.resize());
+        sceneObserver.observe(canvas);
+      })
+      .catch(() => {
+        countdownEl.textContent = "This race needs WebGL.";
+      })
+      .finally(() => {
+        sceneLoading = null;
+      });
   }
   return scene;
+}
+
+function disposeRaceScene() {
+  sceneObserver?.disconnect();
+  sceneObserver = null;
+  scene?.dispose();
+  scene = null;
 }
 
 window.addEventListener("resize", placeCaret);
@@ -643,7 +875,8 @@ for (const tab of document.querySelectorAll<HTMLAnchorElement>(".tabs a")) {
   tab.addEventListener("click", (e) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
     e.preventDefault();
-    navigate(tab.dataset.view === "live" ? "live" : "lobby");
+    if (tab.dataset.action === "daily") startMode("daily");
+    else navigate(tab.dataset.view === "live" ? "live" : "lobby");
   });
 }
 
@@ -669,9 +902,17 @@ $("start").addEventListener("click", () => {
 
 $("leave-room").addEventListener("click", () => navigate("lobby"));
 $("to-menu").addEventListener("click", () => navigate("lobby"));
+$("practice").addEventListener("click", () => startMode("practice"));
+$("daily").addEventListener("click", () => startMode("daily"));
+$("home-ghost").addEventListener("click", () => startMode("ghost"));
+$("home-profile").addEventListener("click", showProfile);
+$("me-chip").addEventListener("click", showProfile);
+$("race-best").addEventListener("click", () => startMode("ghost"));
+$("to-profile").addEventListener("click", showProfile);
 
 $("rematch").addEventListener("click", () => {
   unlockAudio();
+  track("replay", mode);
   send({ t: "rematch" });
 });
 
@@ -692,10 +933,51 @@ async function copy(button: HTMLElement, value: string) {
   try {
     await navigator.clipboard.writeText(value);
     swapLabel(button, "Copied", 1600);
+    return true;
   } catch {
     swapLabel(button, "Copy failed", 1600);
+    return false;
   }
 }
+
+type SharedResult = Pick<Result, "wpm" | "accuracy"> & { mode: RaceMode };
+
+async function shareRace(result: SharedResult, button?: HTMLElement) {
+  const label = result.mode === "daily" ? "today's typing challenge" : result.mode === "ghost" ? "my personal best" : "a typing race";
+  const text = `I hit ${result.wpm} WPM with ${result.accuracy}% accuracy on ${label}. Can you beat it?`;
+  const url = `${location.origin}/${result.mode === "daily" ? "?mode=daily" : ""}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "type race result", text, url });
+      if (button) swapLabel(button, "Shared", 1600);
+      track("result_shared", result.mode);
+      return true;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return null;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(`${text} ${url}`);
+    if (button) swapLabel(button, "Copied", 1600);
+    track("result_shared", result.mode);
+    return true;
+  } catch {
+    if (button) swapLabel(button, "Share failed", 1600);
+    return false;
+  }
+}
+
+async function shareRecord(record: RecordEntry) {
+  const shared = await shareRace({ wpm: record.wpm, accuracy: record.accuracy, mode: record.mode });
+  if (shared === null) return;
+  const statusNode = $("profile-status");
+  statusNode.hidden = false;
+  statusNode.textContent = shared ? "Personal best copied or shared." : "This browser could not share your result.";
+}
+
+$("share-result").addEventListener("click", () => {
+  if (lastResult) void shareRace({ wpm: lastResult.wpm, accuracy: lastResult.accuracy, mode }, $("share-result"));
+});
 
 $("copy").addEventListener("click", () => copy($("copy"), $("link").textContent ?? ""));
 $("copy-watch").addEventListener("click", () => copy($("copy-watch"), watchUrl()));
@@ -707,11 +989,13 @@ function watch(room: string) {
   connect(room, "watch");
 }
 
-initLeaderboard();
 initLive(watch);
 
+const modeParam = params.get("mode");
 if (watchParam) watch(watchParam);
 else if (params.get("view") === "live") show("live");
+else if (params.get("view") === "profile") void showProfile();
+else if (isRaceMode(modeParam) && modeParam !== "multiplayer") startMode(modeParam);
 else {
   if (roomParam) {
     $("lobby-btn").textContent = `Join room ${roomParam}`;

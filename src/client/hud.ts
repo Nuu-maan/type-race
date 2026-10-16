@@ -1,5 +1,4 @@
-import { TRACK } from "../shared/game";
-import { METERS_PER_UNIT } from "./scene";
+import { METERS_PER_UNIT, TRACK } from "../shared/game";
 import { $, el } from "./ui";
 
 export type HudRacer = { id: string; name: string; color: string; pos: number; speed: number; wpm: number; place: number | null; left: boolean };
