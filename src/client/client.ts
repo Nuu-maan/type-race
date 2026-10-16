@@ -612,7 +612,7 @@ function onFinish(winner: string | null, forfeit: boolean, results: Result[], pr
       return row;
     }),
   );
-  renderXp(role === "play" ? saved : undefined);
+  renderXp(role === "play" && mineRow?.finished ? saved : undefined);
   const rematch = $("rematch");
   rematch.hidden = role === "watch";
   rematch.textContent = mode === "daily" ? "Try today again" : mode === "practice" ? "Practice again" : mode === "ghost" ? "Race again" : "Rematch";

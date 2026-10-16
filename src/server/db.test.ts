@@ -107,6 +107,28 @@ test("unfinished traces cannot become personal ghosts", async () => {
   expect((await getProfile("unfinished"))!.ghostReady).toBe(false);
 });
 
+test("unfinished races stay in history without rewards or records", async () => {
+  await ensurePlayer("unrewarded", "Still racing", "cobalt");
+  const attempt = {
+    player: "unrewarded",
+    mode: "ghost" as const,
+    difficulty: "normal" as const,
+    seed: 4,
+    wpm: 200,
+    accuracy: 100,
+    durationMs: 30_000,
+    finished: false,
+    won: false,
+    xp: 200,
+  };
+  expect(await recordAttempt(attempt)).toEqual({ xp: 0, awarded: 0 });
+  expect(await recordRace({ ...attempt, mode: "multiplayer" })).toEqual({ xp: 0, awarded: 0 });
+  const profile = await getProfile("unrewarded");
+  expect(profile).toMatchObject({ xp: 0, bestWpm: 0, averageAccuracy: 0, records: [] });
+  expect(profile!.history.map((race) => race.xp)).toEqual([0, 0]);
+  expect((await leaderboard("normal")).some((row) => row.name === "Still racing")).toBe(false);
+});
+
 test("locked cars are refused", async () => {
   await ensurePlayer("c", "New", "cobalt");
   expect(await setCar("c", { paint: "gold", body: "gt" })).toBe(false);

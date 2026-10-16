@@ -160,12 +160,12 @@ export async function getProfile(id: string): Promise<Profile | null> {
     FROM races WHERE player_id = ${id}`;
   const [solo] = await db`
     SELECT CAST(COUNT(*) AS INTEGER) AS races, MAX(wpm) AS best
-    FROM attempts WHERE player_id = ${id} AND mode != 'multiplayer'`;
+    FROM attempts WHERE player_id = ${id} AND mode != 'multiplayer' AND finished = 1`;
   const [attemptStats] = await db`
     SELECT CAST(COUNT(*) AS INTEGER) AS races, CAST(COALESCE(ROUND(AVG(accuracy)), 0) AS INTEGER) AS accuracy FROM (
       SELECT accuracy FROM races WHERE player_id = ${id}
       UNION ALL
-      SELECT accuracy FROM attempts WHERE player_id = ${id} AND mode != 'multiplayer'
+      SELECT accuracy FROM attempts WHERE player_id = ${id} AND mode != 'multiplayer' AND finished = 1
     ) results`;
   const [modeStats] = await db`
     SELECT CAST(COALESCE(SUM(CASE WHEN mode IN ('practice', 'ghost') THEN 1 ELSE 0 END), 0) AS INTEGER) AS practice,
@@ -177,7 +177,7 @@ export async function getProfile(id: string): Promise<Profile | null> {
       FROM races WHERE player_id = ${id}
       UNION ALL
       SELECT mode, difficulty, wpm, accuracy, duration_ms, at
-      FROM attempts WHERE player_id = ${id} AND mode != 'multiplayer'
+      FROM attempts WHERE player_id = ${id} AND mode != 'multiplayer' AND finished = 1
     ), ranked AS (
       SELECT *, ROW_NUMBER() OVER (PARTITION BY difficulty ORDER BY wpm DESC, accuracy DESC, at ASC) AS rank
       FROM results
@@ -311,9 +311,11 @@ async function playerXp(tx: SQL, player: string) {
 export async function recordAttempt(entry: AttemptEntry) {
   await ready;
   return db.begin(async (tx) => {
-    if (!(await insertAttempt(tx, entry, Date.now()))) return { xp: await playerXp(tx, entry.player), awarded: 0 };
-    const [player] = await tx`UPDATE players SET xp = xp + ${entry.xp} WHERE id = ${entry.player} RETURNING xp`;
-    return { xp: player.xp as number, awarded: entry.xp };
+    const awarded = entry.finished === false ? 0 : entry.xp;
+    if (!(await insertAttempt(tx, { ...entry, xp: awarded }, Date.now()))) return { xp: await playerXp(tx, entry.player), awarded: 0 };
+    if (!awarded) return { xp: await playerXp(tx, entry.player), awarded: 0 };
+    const [player] = await tx`UPDATE players SET xp = xp + ${awarded} WHERE id = ${entry.player} RETURNING xp`;
+    return { xp: player.xp as number, awarded };
   });
 }
 
@@ -323,14 +325,16 @@ export async function recordRace(
   await ready;
   return db.begin(async (tx) => {
     const at = Date.now();
-    if (!(await insertAttempt(tx, { ...entry, mode: entry.mode ?? "multiplayer", seed: entry.seed ?? 0, durationMs: entry.durationMs ?? 0 }, at))) {
+    const awarded = entry.finished === false ? 0 : entry.xp;
+    if (!(await insertAttempt(tx, { ...entry, xp: awarded, mode: entry.mode ?? "multiplayer", seed: entry.seed ?? 0, durationMs: entry.durationMs ?? 0 }, at))) {
       return { xp: await playerXp(tx, entry.player), awarded: 0 };
     }
+    if (entry.finished === false) return { xp: await playerXp(tx, entry.player), awarded: 0 };
     await tx`
       INSERT INTO races (player_id, difficulty, wpm, accuracy, won, xp, at)
-      VALUES (${entry.player}, ${entry.difficulty}, ${entry.wpm}, ${entry.accuracy}, ${entry.won ? 1 : 0}, ${entry.xp}, ${at})`;
-    const [player] = await tx`UPDATE players SET xp = xp + ${entry.xp} WHERE id = ${entry.player} RETURNING xp`;
-    return { xp: player.xp as number, awarded: entry.xp };
+      VALUES (${entry.player}, ${entry.difficulty}, ${entry.wpm}, ${entry.accuracy}, ${entry.won ? 1 : 0}, ${awarded}, ${at})`;
+    const [player] = await tx`UPDATE players SET xp = xp + ${awarded} WHERE id = ${entry.player} RETURNING xp`;
+    return { xp: player.xp as number, awarded };
   });
 }
 

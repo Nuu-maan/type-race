@@ -245,7 +245,7 @@ async function award(room: Room, rows: ResultRow[]) {
     const member = room.members.find((m) => m.data.id === row.id);
     if (!member || row.left) return null;
     const place = row.finished ? row.place : racers;
-    const requested = room.mode === "multiplayer"
+    const requested = !row.finished ? 0 : room.mode === "multiplayer"
       ? raceXp(row.wpm, row.accuracy, room.difficulty, place, racers)
       : effortXp(row.wpm, row.accuracy, room.difficulty);
     let awarded = 0;
