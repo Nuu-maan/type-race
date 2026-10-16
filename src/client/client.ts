@@ -551,7 +551,16 @@ function renderBanner(now: number) {
 
 function setResultsOpen(open: boolean) {
   $("finish").hidden = !open;
-  for (const node of [$("race").querySelector<HTMLElement>(".track-stage")!, wordsEl, $("race-tools"), $("spectate-bar"), document.querySelector<HTMLElement>(".bar")!]) {
+  const background = [
+    ghost,
+    document.querySelector<HTMLElement>(".skip")!,
+    $("race").querySelector<HTMLElement>(".track-stage")!,
+    wordsEl,
+    $("race-tools"),
+    $("spectate-bar"),
+    document.querySelector<HTMLElement>(".bar")!,
+  ];
+  for (const node of background) {
     node.inert = open;
   }
 }
