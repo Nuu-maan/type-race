@@ -36,6 +36,8 @@ const TICK_MS = 50;
 const PLAYER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_SPECTATORS = 50;
 const RECONNECT_MS = FINISH_GRACE_MS + 1000;
+const EVENT_WINDOW_MS = 60_000;
+const MAX_EVENTS_PER_WINDOW = 30;
 const ROOM_IDLE_MS = Number(process.env.ROOM_IDLE_MS ?? 10 * 60_000);
 const production = process.env.NODE_ENV === "production";
 const clientDirectory = `${import.meta.dir}/../../dist/client`;
@@ -90,6 +92,7 @@ type Room = {
 
 const rooms = new Map<string, Room>();
 const reconnects = new Map<string, { room: string; player: string; timer: Timer }>();
+const eventRates = new Map<string, { startedAt: number; accepted: number }>();
 
 function createRoom(code: string, host: string, mode: RaceMode): Room {
   return {
@@ -500,6 +503,7 @@ async function changeCar(ws: Socket, room: Room, msg: { paint?: unknown; body?: 
 
 function closeIdleRooms() {
   const now = Date.now();
+  for (const [client, rate] of eventRates) if (now - rate.startedAt >= EVENT_WINDOW_MS) eventRates.delete(client);
   for (const room of rooms.values()) {
     if (room.settling) continue;
     if (now - room.active < ROOM_IDLE_MS) continue;
@@ -632,7 +636,19 @@ async function join(ws: Socket) {
   else await rearmSolo(room);
 }
 
-async function eventResponse(req: Request) {
+function acceptEvent(client: string, now = Date.now()) {
+  let rate = eventRates.get(client);
+  if (!rate || now - rate.startedAt >= EVENT_WINDOW_MS) {
+    rate = { startedAt: now, accepted: 0 };
+    eventRates.set(client, rate);
+  }
+  if (rate.accepted >= MAX_EVENTS_PER_WINDOW) return false;
+  rate.accepted++;
+  return true;
+}
+
+async function eventResponse(req: Request, client: string) {
+  if (!acceptEvent(client)) return new Response("Too many events", { status: 429, headers: { "retry-after": "60" } });
   if (Number(req.headers.get("content-length") ?? 0) > 1024) return new Response("Event too large", { status: 413 });
   let value: unknown;
   try {
@@ -661,6 +677,7 @@ async function eventResponse(req: Request) {
 export const server = Bun.serve({
   port: Number(process.env.PORT ?? 3000),
   development: !production,
+  maxRequestBodySize: 2048,
   routes: {
     "/_shell": shellRoute,
     "/assets/:name": (req) => asset(req.params.name),
@@ -689,7 +706,7 @@ export const server = Bun.serve({
       const id = new URL(req.url).searchParams.get("id") ?? "";
       return Response.json(await competitions(PLAYER_ID.test(id) ? id : undefined).catch(() => ({ daily: null, weekly: null })));
     },
-    "/api/event": { POST: eventResponse },
+    "/api/event": { POST: (req, server) => eventResponse(req, server.requestIP(req)?.address ?? "unknown") },
     "/api/profile": async (req) => {
       const id = new URL(req.url).searchParams.get("id") ?? "";
       return Response.json(PLAYER_ID.test(id) ? await getProfile(id).catch(() => null) : null);

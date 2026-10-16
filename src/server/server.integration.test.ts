@@ -108,4 +108,15 @@ test("telemetry rejects unknown and oversized events", async () => {
   expect(invalid.status).toBe(400);
   const oversized = await fetch(`${base}/api/event`, { method: "POST", headers, body: JSON.stringify({ data: "x".repeat(1100) }) });
   expect(oversized.status).toBe(413);
+  const statuses = [];
+  for (let i = 0; i < 35; i++) {
+    const response = await fetch(`${base}/api/event`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ session: crypto.randomUUID(), name: "profile_viewed" }),
+    });
+    statuses.push(response.status);
+  }
+  expect(statuses).toContain(204);
+  expect(statuses).toContain(429);
 });
