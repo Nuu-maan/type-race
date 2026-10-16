@@ -383,11 +383,22 @@ export async function bestGhost(player: string) {
   }
 }
 
-type CompetitionRow = { id: string; name: string; xp: number; paint: string; score: number; wpm: number; accuracy: number; days?: number };
+type CompetitionRow = {
+  id: string;
+  name: string;
+  xp: number;
+  paint: string;
+  score: number;
+  wpm: number;
+  accuracy: number;
+  place: number;
+  participants: number;
+  days?: number;
+};
 
 function competitionRows(rows: CompetitionRow[], player?: string) {
-  return rows.map((row, index) => ({
-    rank: index + 1,
+  return rows.map((row) => ({
+    rank: Number(row.place),
     name: row.name,
     level: levelFromXp(row.xp),
     paint: row.paint,
@@ -404,34 +415,41 @@ export async function competitions(player?: string) {
   const today = dayKey();
   const monday = weekKey();
   const daily: CompetitionRow[] = await db`
-    WITH ranked AS (
-      SELECT a.player_id, CAST(a.wpm * a.accuracy / 100.0 AS INTEGER) AS score, a.wpm, a.accuracy,
+    WITH attempts_ranked AS (
+      SELECT a.player_id, CAST(a.wpm * a.accuracy / 100 AS INTEGER) AS score, a.wpm, a.accuracy,
         ROW_NUMBER() OVER (PARTITION BY a.player_id ORDER BY a.wpm * a.accuracy DESC, a.wpm DESC, a.accuracy DESC, a.at ASC) AS rank
-      FROM attempts a WHERE a.mode = 'daily' AND a.challenge_key = ${today}
+      FROM attempts a WHERE a.mode = 'daily' AND a.challenge_key = ${today} AND a.finished = 1
+    ), best AS (
+      SELECT player_id, score, wpm, accuracy FROM attempts_ranked WHERE rank = 1
+    ), standings AS (
+      SELECT p.id, p.name, p.xp, p.paint, b.score, b.wpm, b.accuracy,
+        CAST(ROW_NUMBER() OVER (ORDER BY b.score DESC, b.wpm DESC, b.accuracy DESC, p.id) AS INTEGER) AS place,
+        CAST(COUNT(*) OVER () AS INTEGER) AS participants
+      FROM best b JOIN players p ON p.id = b.player_id
     )
-    SELECT p.id, p.name, p.xp, p.paint, r.score, r.wpm, r.accuracy
-    FROM ranked r JOIN players p ON p.id = r.player_id
-    WHERE r.rank = 1
-    ORDER BY score DESC, wpm DESC
-    LIMIT 20`;
+    SELECT * FROM standings WHERE place <= 20 OR id = ${player ?? ""} ORDER BY place`;
   const weekly: CompetitionRow[] = await db`
     WITH ranked AS (
-      SELECT player_id, challenge_key, CAST(wpm * accuracy / 100.0 AS INTEGER) AS score, wpm, accuracy,
+      SELECT player_id, challenge_key, CAST(wpm * accuracy / 100 AS INTEGER) AS score, wpm, accuracy,
         ROW_NUMBER() OVER (PARTITION BY player_id, challenge_key ORDER BY wpm * accuracy DESC, wpm DESC, accuracy DESC, at ASC) AS rank
-      FROM attempts WHERE mode = 'daily' AND challenge_key >= ${monday}
+      FROM attempts WHERE mode = 'daily' AND challenge_key >= ${monday} AND finished = 1
     ), daily_best AS (
       SELECT player_id, score, wpm, accuracy FROM ranked WHERE rank = 1
+    ), totals AS (
+      SELECT p.id, p.name, p.xp, p.paint, CAST(SUM(d.score) AS INTEGER) AS score,
+        MAX(d.wpm) AS wpm, CAST(ROUND(AVG(d.accuracy)) AS INTEGER) AS accuracy, CAST(COUNT(*) AS INTEGER) AS days
+      FROM daily_best d JOIN players p ON p.id = d.player_id
+      GROUP BY p.id, p.name, p.xp, p.paint
+    ), standings AS (
+      SELECT *, CAST(ROW_NUMBER() OVER (ORDER BY score DESC, days DESC, wpm DESC, id) AS INTEGER) AS place,
+        CAST(COUNT(*) OVER () AS INTEGER) AS participants
+      FROM totals
     )
-    SELECT p.id, p.name, p.xp, p.paint, CAST(SUM(d.score) AS INTEGER) AS score,
-      MAX(d.wpm) AS wpm, CAST(ROUND(AVG(d.accuracy)) AS INTEGER) AS accuracy, CAST(COUNT(*) AS INTEGER) AS days
-    FROM daily_best d JOIN players p ON p.id = d.player_id
-    GROUP BY p.id, p.name, p.xp, p.paint
-    ORDER BY score DESC, days DESC, wpm DESC
-    LIMIT 20`;
+    SELECT * FROM standings WHERE place <= 20 OR id = ${player ?? ""} ORDER BY place`;
   const dailyEntries = competitionRows(daily, player);
   const weeklyEntries = competitionRows(weekly, player);
   return {
-    daily: { key: today, participants: dailyEntries.length, entries: dailyEntries, you: dailyEntries.find((row) => row.isYou) ?? null },
+    daily: { key: today, participants: Number(daily[0]?.participants ?? 0), entries: dailyEntries, you: dailyEntries.find((row) => row.isYou) ?? null },
     weekly: { key: monday, entries: weeklyEntries, you: weeklyEntries.find((row) => row.isYou) ?? null },
   };
 }

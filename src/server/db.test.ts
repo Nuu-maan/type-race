@@ -264,3 +264,56 @@ test("attempts build history, goals, ghost data and competitions", async () => {
   expect(board.daily.you).toMatchObject({ name: "Daily", score: 77, wpm: 80, accuracy: 97 });
   expect(board.weekly.you).toMatchObject({ days: 1, score: 77, wpm: 80, accuracy: 97 });
 });
+
+test("competition totals and personal ranks extend beyond the top twenty", async () => {
+  const before = (await competitions()).daily.participants;
+  for (let i = 0; i < 20; i++) {
+    const player = `crowd-${i}`;
+    await ensurePlayer(player, `Crowd ${i}`, "cobalt");
+    await recordAttempt({
+      player,
+      mode: "daily",
+      difficulty: "normal",
+      seed: i,
+      challengeKey: dayKey(),
+      wpm: 120 - i,
+      accuracy: 100,
+      durationMs: 60_000,
+      won: true,
+      xp: 0,
+    });
+  }
+  await ensurePlayer("crowd-low", "Crowd Low", "cobalt");
+  await recordAttempt({
+    player: "crowd-low",
+    mode: "daily",
+    difficulty: "normal",
+    seed: 21,
+    challengeKey: dayKey(),
+    wpm: 1,
+    accuracy: 1,
+    durationMs: 60_000,
+    won: true,
+    xp: 0,
+  });
+  await ensurePlayer("crowd-unfinished", "Crowd Unfinished", "cobalt");
+  await recordAttempt({
+    player: "crowd-unfinished",
+    mode: "daily",
+    difficulty: "normal",
+    seed: 22,
+    challengeKey: dayKey(),
+    wpm: 200,
+    accuracy: 100,
+    durationMs: 20_000,
+    finished: false,
+    won: false,
+    xp: 0,
+  });
+
+  const board = await competitions("crowd-low");
+  expect(board.daily.participants).toBe(before + 21);
+  expect(board.daily.entries).toHaveLength(21);
+  expect(board.daily.you).toMatchObject({ name: "Crowd Low", rank: before + 21 });
+  expect(board.daily.entries.some((entry) => entry.name === "Crowd Unfinished")).toBe(false);
+}, 10_000);
