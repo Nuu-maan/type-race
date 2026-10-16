@@ -40,7 +40,7 @@ async function migrate() {
   await db.unsafe("CREATE INDEX IF NOT EXISTS races_by_difficulty ON races (difficulty, player_id)");
   await db.unsafe(`CREATE TABLE IF NOT EXISTS attempts (
     id ${postgres ? "BIGINT GENERATED ALWAYS AS IDENTITY" : "INTEGER"} PRIMARY KEY,
-    run_id TEXT NOT NULL UNIQUE,
+    run_id TEXT NOT NULL,
     player_id TEXT NOT NULL REFERENCES players(id),
     mode TEXT NOT NULL,
     difficulty TEXT NOT NULL,
@@ -57,6 +57,15 @@ async function migrate() {
     text TEXT,
     at BIGINT NOT NULL
   )`);
+  const attemptColumns: { name: string }[] = postgres
+    ? await db`SELECT column_name AS name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'attempts'`
+    : await db.unsafe("PRAGMA table_info(attempts)");
+  const attemptColumnNames = new Set(attemptColumns.map((column) => column.name));
+  if (!attemptColumnNames.has("run_id")) await db.unsafe("ALTER TABLE attempts ADD COLUMN run_id TEXT");
+  if (!attemptColumnNames.has("text")) await db.unsafe("ALTER TABLE attempts ADD COLUMN text TEXT");
+  if (!attemptColumnNames.has("finished")) await db.unsafe("ALTER TABLE attempts ADD COLUMN finished INTEGER NOT NULL DEFAULT 1");
+  await db.unsafe("UPDATE attempts SET run_id = 'legacy:' || id WHERE run_id IS NULL");
+  await db.unsafe("CREATE UNIQUE INDEX IF NOT EXISTS attempts_by_run_id ON attempts (run_id)");
   await db.unsafe("CREATE INDEX IF NOT EXISTS attempts_by_player ON attempts (player_id, at)");
   await db.unsafe("CREATE INDEX IF NOT EXISTS attempts_by_challenge ON attempts (challenge_key, player_id)");
   await db.unsafe(`CREATE TABLE IF NOT EXISTS events (

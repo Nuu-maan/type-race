@@ -1,4 +1,8 @@
 import { expect, test } from "bun:test";
+import { SQL } from "bun";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { dayKey } from "../shared/challenge";
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? ":memory:";
@@ -23,6 +27,44 @@ test("database readiness and daily text are stable", async () => {
   expect(second).toEqual(first);
   expect(first).toMatchObject({ key: "2026-10-16", difficulty: "normal", endsAt: Date.UTC(2026, 9, 17) });
   expect(first.text.length).toBeGreaterThan(100);
+});
+
+test("legacy attempt tables upgrade without losing races", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "type-race-legacy-"));
+  const path = join(directory, "legacy.sqlite");
+  const legacy = new SQL(`sqlite://${path}`);
+  await legacy.unsafe(`CREATE TABLE players (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, xp INTEGER NOT NULL DEFAULT 0, paint TEXT NOT NULL DEFAULT 'cobalt',
+    body TEXT NOT NULL DEFAULT 'gt', created_at BIGINT NOT NULL)`);
+  await legacy.unsafe(`CREATE TABLE attempts (
+    id INTEGER PRIMARY KEY, player_id TEXT NOT NULL REFERENCES players(id), mode TEXT NOT NULL, difficulty TEXT NOT NULL,
+    seed BIGINT NOT NULL, challenge_key TEXT, wpm INTEGER NOT NULL, accuracy INTEGER NOT NULL, duration_ms INTEGER NOT NULL,
+    won INTEGER NOT NULL, xp INTEGER NOT NULL, first_key_ms INTEGER, trace TEXT, at BIGINT NOT NULL)`);
+  await legacy`INSERT INTO players (id, name, created_at) VALUES ('legacy', 'Legacy', 1)`;
+  await legacy`INSERT INTO attempts
+    (player_id, mode, difficulty, seed, wpm, accuracy, duration_ms, won, xp, at)
+    VALUES ('legacy', 'practice', 'normal', 1, 60, 95, 60000, 1, 50, ${Date.now()})`;
+  await legacy.close();
+
+  const child = Bun.spawn([process.execPath, "-e", "const db = await import('./src/server/db.ts'); console.log(JSON.stringify(await db.getProfile('legacy')))"], {
+    cwd: `${import.meta.dir}/../..`,
+    env: { ...process.env, DATABASE_URL: "", DB_PATH: path },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const output = await new Response(child.stdout).text();
+  const error = await new Response(child.stderr).text();
+  expect(await child.exited).toBe(0);
+  expect(error).toBe("");
+  expect(JSON.parse(output)).toMatchObject({ races: 1, bestWpm: 60, history: [{ finished: true, wpm: 60 }] });
+
+  const upgraded = new SQL(`sqlite://${path}`);
+  const columns: { name: string }[] = await upgraded.unsafe("PRAGMA table_info(attempts)");
+  expect(columns.map((column) => column.name)).toEqual(expect.arrayContaining(["run_id", "text", "finished"]));
+  const [attempt] = await upgraded`SELECT run_id, finished FROM attempts WHERE id = 1`;
+  expect(attempt).toMatchObject({ run_id: "legacy:1", finished: 1 });
+  await upgraded.close();
+  rmSync(directory, { recursive: true, force: true });
 });
 
 test("races add xp, stats and leaderboard rows", async () => {
