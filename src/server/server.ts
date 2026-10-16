@@ -227,6 +227,9 @@ function statePlayers(room: Room, now: number) {
     const elapsed = Math.max(0, now - race.startedAt);
     const pos = tracePosition(room.ghost.trace, elapsed);
     const previous = tracePosition(room.ghost.trace, Math.max(0, elapsed - TICK_MS));
+    const humanFinishedAt = race.players[0]?.finishedAt ?? null;
+    const humanWon = humanFinishedAt !== null && humanFinishedAt - race.startedAt <= room.ghost.durationMs;
+    if (players[0] && humanFinishedAt !== null) players[0].place = humanWon ? 1 : 2;
     players.push({
       id: room.ghost.id,
       pos,
@@ -234,15 +237,9 @@ function statePlayers(room: Room, now: number) {
       wpm: room.ghost.wpm,
       slip: false,
       nitro: false,
-      place: pos >= TRACK ? 1 : null,
+      place: pos >= TRACK ? (humanWon ? 2 : 1) : null,
       left: false,
     });
-    players
-      .slice()
-      .sort((a, b) => b.pos - a.pos)
-      .forEach((player, index) => {
-        player.place = index + 1;
-      });
   }
   return players;
 }

@@ -5,14 +5,12 @@ import { join } from "node:path";
 import { FINISH_GRACE_MS } from "../shared/game";
 
 const directory = mkdtempSync(join(tmpdir(), "type-race-server-"));
+const databasePath = join(directory, "test.sqlite");
 const port = 32_000 + Math.floor(Math.random() * 10_000);
 const base = `http://127.0.0.1:${port}`;
-const child = Bun.spawn([process.execPath, "src/server/server.ts"], {
-  cwd: join(import.meta.dir, "../.."),
-  env: { ...process.env, PORT: String(port), DB_PATH: join(directory, "test.sqlite"), DATABASE_URL: "" },
-  stdout: "ignore",
-  stderr: "pipe",
-});
+const root = join(import.meta.dir, "../..");
+const ghostPlayer = "11111111-1111-4111-8111-111111111111";
+let child: ReturnType<typeof Bun.spawn> | null = null;
 
 type Message = Record<string, any>;
 
@@ -44,17 +42,35 @@ function inbox(url: string) {
 }
 
 beforeAll(async () => {
+  const seed = Bun.spawn([
+    process.execPath,
+    "-e",
+    `const db = await import('./src/server/db.ts'); await db.ensurePlayer('${ghostPlayer}', 'Ghost tester', 'cobalt'); await db.recordAttempt({runId:'ghost-fixture',player:'${ghostPlayer}',mode:'practice',difficulty:'normal',seed:1,wpm:80,accuracy:98,durationMs:60000,won:true,xp:80,trace:[[0,0],[30000,500],[60000,1000]],text:'one two three four five six seven eight nine ten'});`,
+  ], {
+    cwd: root,
+    env: { ...process.env, DB_PATH: databasePath, DATABASE_URL: "" },
+    stdout: "ignore",
+    stderr: "pipe",
+  });
+  if (await seed.exited) throw new Error(`Could not seed ghost fixture: ${await new Response(seed.stderr).text()}`);
+  const serverProcess = Bun.spawn([process.execPath, "src/server/server.ts"], {
+    cwd: root,
+    env: { ...process.env, PORT: String(port), DB_PATH: databasePath, DATABASE_URL: "" },
+    stdout: "ignore",
+    stderr: "pipe",
+  });
+  child = serverProcess;
   for (let attempt = 0; attempt < 50; attempt++) {
     try {
       if ((await fetch(`${base}/api/health`)).ok) return;
     } catch {}
     await Bun.sleep(20);
   }
-  throw new Error(`Test server did not start: ${await new Response(child.stderr).text()}`);
+  throw new Error(`Test server did not start: ${await new Response(serverProcess.stderr).text()}`);
 });
 
 afterAll(() => {
-  child.kill();
+  child?.kill();
   rmSync(directory, { recursive: true, force: true });
 });
 
@@ -96,6 +112,20 @@ test("multiplayer still waits for two racers", async () => {
   expect(await host.next("countdown")).toMatchObject({ mode: "multiplayer", ms: 3000 });
   host.socket.close();
   guest.socket.close();
+});
+
+test("ghost racers stay active until they actually finish", async () => {
+  const race = inbox(`ws://127.0.0.1:${port}/ws?room=SOLO&mode=ghost&pid=${ghostPlayer}&sid=${crypto.randomUUID()}`);
+  const hello = await race.next("hello");
+  const ready = await race.next("countdown");
+  expect(ready).toMatchObject({ mode: "ghost", ms: 0 });
+  race.socket.send(JSON.stringify({ t: "key", c: ready.text[0] }));
+  await race.next("go");
+  const state = await race.next("state");
+  expect(state.players).toHaveLength(2);
+  expect(state.players.find((player: Message) => player.id === hello.you)?.place).toBeNull();
+  expect(state.players.find((player: Message) => player.id.startsWith("ghost:"))?.place).toBeNull();
+  race.socket.close();
 });
 
 test("telemetry rejects unknown and oversized events", async () => {
