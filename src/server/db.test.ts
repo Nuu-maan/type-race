@@ -93,6 +93,7 @@ test("unfinished traces cannot become personal ghosts", async () => {
     text: "unfinished text",
   });
   expect(await bestGhost("unfinished")).toBeNull();
+  expect((await getProfile("unfinished"))!.ghostReady).toBe(false);
 });
 
 test("locked cars are refused", async () => {
@@ -166,6 +167,7 @@ test("attempts build history, goals, ghost data and competitions", async () => {
     dailyRaces: 2,
     dailyStreak: 1,
     readyInMs: 4200,
+    ghostReady: true,
   });
   expect(profile.records).toEqual([
     expect.objectContaining({ mode: "daily", difficulty: "normal", wpm: 85, accuracy: 80 }),

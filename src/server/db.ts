@@ -144,6 +144,7 @@ export type Profile = {
   dailyRaces: number;
   dailyStreak: number;
   readyInMs: number | null;
+  ghostReady: boolean;
   records: RecordEntry[];
   history: HistoryEntry[];
   goals: Goal[];
@@ -197,6 +198,9 @@ export async function getProfile(id: string): Promise<Profile | null> {
   const [activation] = await db`
     SELECT MIN(elapsed_ms) AS ready FROM events
     WHERE player_id = ${id} AND name = 'first_keystroke' AND elapsed_ms IS NOT NULL`;
+  const [ghost] = await db`
+    SELECT 1 AS ready FROM attempts
+    WHERE player_id = ${id} AND finished = 1 AND trace IS NOT NULL AND text IS NOT NULL LIMIT 1`;
   const bestWpm = Math.max(ranked.best ?? 0, solo.best ?? 0);
   const targetWpm = nextWpmTarget(bestWpm);
   return {
@@ -213,6 +217,7 @@ export async function getProfile(id: string): Promise<Profile | null> {
     dailyRaces: modeStats.daily,
     dailyStreak: dailyStreak(challengeRows.map((entry: { challenge_key: string }) => entry.challenge_key)),
     readyInMs: activation.ready ?? null,
+    ghostReady: Boolean(ghost),
     records: recordRows.map((entry: Record<string, unknown>) => ({
       mode: entry.mode as RaceMode,
       difficulty: entry.difficulty as Difficulty,
