@@ -30,6 +30,7 @@
           <a href="/" data-view="lobby" aria-current="page">Play</a>
           <a href="/?mode=daily" data-action="daily">Daily</a>
           <a href="/?view=live" data-view="live">Live races<span id="live-count" class="badge" hidden>0</span></a>
+          <a href="/changelog" data-view="changelog" class="tab-changelog">Changelog</a>
         </nav>
         <span id="crumb" class="crumb"></span>
         <div class="bar-end">
@@ -49,17 +50,22 @@
 
       <section id="lobby" class="screen">
         <div class="hero">
+          <img class="hero-poster" src="./media/hero-poster.webp" alt="" width="1600" height="926" fetchpriority="high" decoding="async" />
           <canvas id="hero-canvas" aria-hidden="true"></canvas>
           <div class="hero-content">
-            <p class="eyebrow">Practice solo · race friends · improve daily</p>
+            <a id="release-pill" class="release-pill" href="/changelog" data-nav="changelog" hidden></a>
             <h1>Type fast.<br />Drive fast.</h1>
-            <p class="lede">Your typing speed drives the car. Start alone now, then come back to beat your best.</p>
+            <p class="lede">A typing race where your speed is your car's speed. Practice on your own, take today's challenge or race your friends.</p>
             <div class="hero-actions">
               <button id="practice" class="btn primary hero-primary" type="button">Practice now</button>
               <button id="daily" class="btn hero-secondary" type="button">Today's challenge</button>
             </div>
-            <p class="start-note">No sign-up. The clock starts with your first key.</p>
-            <details class="friend-race">
+            <ul class="hero-facts">
+              <li>No sign-up</li>
+              <li>Starts on your first key</li>
+              <li>Free and open source</li>
+            </ul>
+            <details id="friend-race" class="friend-race">
               <summary>Create a friend race</summary>
               <label class="field-label" for="name">Racer name</label>
               <form id="lobby-form" class="field">
@@ -83,31 +89,50 @@
           </div>
         </section>
 
-        <section class="section" aria-labelledby="how-title">
-          <h2 id="how-title">How it plays</h2>
-          <ol class="steps">
-            <li><span class="step-n">1</span><h3>Start typing</h3><p>Practice immediately. Your first key starts the clock.</p></li>
-            <li><span class="step-n">2</span><h3>Set a record</h3><p>See your speed, accuracy, goals and recent races.</p></li>
-            <li><span class="step-n">3</span><h3>Beat yourself</h3><p>Race your personal-best ghost or take the same daily challenge.</p></li>
-          </ol>
-          <div class="rules">
-            <div class="rule">
-              <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 3.5a6.5 6.5 0 0 0-6.5 6.5c0 1.3.4 2.5 1 3.5h11a6.5 6.5 0 0 0-5.5-10z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m9 10.5 3-3" stroke="var(--color-bg-page)" stroke-width="1.6" stroke-linecap="round" /></svg>
-              <div><h3>Speed is your WPM</h3><p>Measured over the last three seconds, with momentum.</p></div>
-            </div>
-            <div class="rule">
-              <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="2.5" width="13" height="13" rx="4" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m7 7 4 4m0-4-4 4" stroke="var(--color-bg-page)" stroke-width="1.6" stroke-linecap="round" /></svg>
-              <div><h3>Mistakes cost acceleration</h3><p>Wrong letters show red and you keep going, but you pick up speed slower.</p></div>
-            </div>
-            <div class="rule">
-              <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9.5 2.5c.5 2.5 4 4.5 4 8.5a4.5 4.5 0 0 1-9 0c0-1.8.8-3 1.8-4 .2 1.3.9 2 1.7 2.2C7.6 7 8 4.6 9.5 2.5z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
-              <div><h3>Clean streaks give nitro</h3><p>Eight words in a row without a mistake fire a short boost.</p></div>
-            </div>
-            <div class="rule">
-              <svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2.5 11 6.6l4.5.6-3.3 3.1.8 4.5L9 12.7l-4 2.1.8-4.5-3.3-3.1 4.5-.6z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
-              <div><h3>Level up your car</h3><p>Every race earns XP, more for a podium finish. New paints and bodies unlock as you level.</p></div>
-            </div>
+        <section class="section" aria-labelledby="modes-title">
+          <div class="section-intro">
+            <p class="eyebrow">Three ways to play</p>
+            <h2 id="modes-title">Race yourself, everyone or your friends</h2>
           </div>
+          <ul class="modes">
+            <li class="mode">
+              <img src="./media/shot-practice.webp" alt="A practice race: a car on a neon highway at 172 km/h, with the words being typed below" width="900" height="562" loading="lazy" decoding="async" />
+              <div class="mode-body">
+                <h3>Practice</h3>
+                <p>The clock starts on your first key. Your best run is saved, so next time you race its ghost.</p>
+                <button class="btn small" type="button" data-start="practice">Practice now</button>
+              </div>
+            </li>
+            <li class="mode">
+              <img src="./media/shot-progress.webp" alt="The profile: personal best, accuracy and streak, today's goals, records and recent races" width="900" height="562" loading="lazy" decoding="async" />
+              <div class="mode-body">
+                <h3>Daily challenge</h3>
+                <p>One course a day, the same for everyone. Climb the daily and weekly standings and hit today's goals.</p>
+                <button class="btn small" type="button" data-start="daily">Today's challenge</button>
+              </div>
+            </li>
+            <li class="mode">
+              <img src="./media/shot-friends.webp" alt="A friend room: a car in the garage, three racers joined and invite links for racers and spectators" width="900" height="562" loading="lazy" decoding="async" />
+              <div class="mode-body">
+                <h3>Race friends</h3>
+                <p>Send a link and race up to five people on the same words. Anyone can watch from Live races.</p>
+                <button class="btn small" type="button" data-start="friends">Create a room</button>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="section" aria-labelledby="rules-title">
+          <div class="section-intro">
+            <p class="eyebrow">The rules of the road</p>
+            <h2 id="rules-title">How speed works</h2>
+          </div>
+          <ul class="rules">
+            <li class="rule"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 3.5a6.5 6.5 0 0 0-6.5 6.5c0 1.3.4 2.5 1 3.5h11a6.5 6.5 0 0 0-5.5-10z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m9 10.5 3-3" stroke="var(--color-bg-control)" stroke-width="1.6" stroke-linecap="round" /></svg><h3>Speed is your WPM</h3><p>Measured over your last three seconds, with momentum, so bursts count and the car coasts when you stop.</p></li>
+            <li class="rule"><svg viewBox="0 0 18 18" aria-hidden="true"><rect x="2.5" y="2.5" width="13" height="13" rx="4" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /><path d="m7 7 4 4m0-4-4 4" stroke="var(--color-bg-control)" stroke-width="1.6" stroke-linecap="round" /></svg><h3>Mistakes cost acceleration</h3><p>Wrong letters show red and you keep going, but you pick up speed slower for a moment.</p></li>
+            <li class="rule"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9.5 2.5c.5 2.5 4 4.5 4 8.5a4.5 4.5 0 0 1-9 0c0-1.8.8-3 1.8-4 .2 1.3.9 2 1.7 2.2C7.6 7 8 4.6 9.5 2.5z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg><h3>Clean streaks give nitro</h3><p>Eight words in a row without a mistake fire a short boost.</p></li>
+            <li class="rule"><svg viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2.5 11 6.6l4.5.6-3.3 3.1.8 4.5L9 12.7l-4 2.1.8-4.5-3.3-3.1 4.5-.6z" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg><h3>Level up your car</h3><p>Every finished race earns XP. New paints and bodies unlock in the garage as you level.</p></li>
+          </ul>
         </section>
 
         <section class="section" aria-labelledby="board-title">
@@ -122,6 +147,14 @@
           </div>
           <ol id="board" class="board" aria-live="polite"></ol>
         </section>
+
+        <section class="section" aria-labelledby="news-title">
+          <div class="section-head">
+            <h2 id="news-title">What's new</h2>
+            <a class="btn small" href="/changelog" data-nav="changelog">Full changelog</a>
+          </div>
+          <ol id="whats-new" class="news"></ol>
+        </section>
       </section>
 
       <section id="live" class="screen" hidden aria-labelledby="live-title">
@@ -133,6 +166,15 @@
           <a class="btn primary" href="/">Start a race</a>
         </div>
         <ol id="live-list" class="live-list"></ol>
+      </section>
+
+      <section id="changelog" class="screen" hidden aria-labelledby="changelog-title">
+        <div class="page-head">
+          <p class="eyebrow">Changelog</p>
+          <h1 id="changelog-title">What's new in type race</h1>
+          <p class="lede">Every update, newest first. The same notes live in the repo as <a href="https://github.com/Nuu-maan/type-race/blob/main/CHANGELOG.md">CHANGELOG.md</a>.</p>
+        </div>
+        <ol id="releases" class="releases"></ol>
       </section>
 
       <section id="profile" class="screen profile-screen" hidden aria-labelledby="profile-title">
@@ -272,6 +314,33 @@
           </div>
         </div>
       </section>
+      <footer class="site-footer">
+        <div class="footer-brand">
+          <a class="brand" href="/" data-nav="lobby" aria-label="type race home">
+            <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M6 12h10M4 17h8M8 22h7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+              <rect x="17" y="13" width="11" height="8" rx="3" fill="var(--color-accent-solid)" />
+            </svg>
+            <span class="brand-text">type race</span>
+          </a>
+          <p>A multiplayer typing race. Your speed is your car's speed.</p>
+        </div>
+        <nav class="footer-links" aria-label="Footer">
+          <div>
+            <h2>Play</h2>
+            <a href="/" data-nav="practice">Practice</a>
+            <a href="/?mode=daily" data-nav="daily">Today's challenge</a>
+            <a href="/?view=live" data-nav="live">Live races</a>
+          </div>
+          <div>
+            <h2>Project</h2>
+            <a href="/changelog" data-nav="changelog">Changelog</a>
+            <a href="https://github.com/Nuu-maan/type-race">Source code</a>
+            <a href="https://github.com/Nuu-maan/type-race/issues/new/choose">Report a bug</a>
+          </div>
+        </nav>
+        <p class="footer-note">Open source under the MIT license.</p>
+      </footer>
     </main>
     <script type="module" src="./client.ts"></script>
   </body>

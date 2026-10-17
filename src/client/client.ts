@@ -26,13 +26,13 @@ import { $, bindSeg, countUp, el, replay, setSegEnabled, swapLabel } from "./ui"
 type Info = { id: string; name: string; xp: number; level: number; car: Car };
 type Status = "lobby" | "countdown" | "racing" | "finished";
 type Role = "play" | "watch";
-type View = "lobby" | "live" | "profile" | "room" | "race";
+type View = "lobby" | "live" | "profile" | "room" | "race" | "changelog";
 type CarState = { id: string; pos: number; speed: number; wpm: number; slip: boolean; nitro: boolean; place: number | null; left: boolean };
 type SceneCar = { pos: number; body: string; speed: number; slip: boolean; nitro: boolean; name: string; color: string };
 type Result = { id: string; name: string; place: number; finished: boolean; left: boolean; wpm: number; accuracy: number; time: number; pos: number };
 type Progress = { gained: number; xp: number; level: number; leveledUp: boolean; unlocked: string[]; saved: boolean };
 
-const screens: Record<View, HTMLElement> = { lobby: $("lobby"), live: $("live"), profile: $("profile"), room: $("room"), race: $("race") };
+const screens: Record<View, HTMLElement> = { lobby: $("lobby"), live: $("live"), profile: $("profile"), room: $("room"), race: $("race"), changelog: $("changelog") };
 const nameInput = $<HTMLInputElement>("name");
 const ghost = $<HTMLInputElement>("ghost");
 const wordsEl = $("words");
@@ -110,8 +110,8 @@ function show(next: View) {
   for (const tab of document.querySelectorAll<HTMLAnchorElement>(".tabs a")) {
     const current = tab.dataset.action === "daily"
       ? next === "race" && mode === "daily"
-      : tab.dataset.view === "live"
-        ? next === "live"
+      : tab.dataset.view === "live" || tab.dataset.view === "changelog"
+        ? next === tab.dataset.view
         : next === "lobby" || (next === "race" && mode !== "daily");
     if (current) tab.setAttribute("aria-current", "page");
     else tab.removeAttribute("aria-current");
@@ -144,6 +144,15 @@ function goLive(message = "") {
   setCrumb("");
   show("live");
   if (message) $("live-list").before(Object.assign(el("p", "error fresh", message), { id: "live-error" }));
+}
+
+function goChangelog(hash = "") {
+  history.replaceState(null, "", `/changelog${hash}`);
+  setCrumb("");
+  show("changelog");
+  const target = hash ? document.getElementById(hash.slice(1)) : null;
+  if (target) target.scrollIntoView();
+  else window.scrollTo(0, 0);
 }
 
 function renderHomeProgress() {
@@ -864,11 +873,38 @@ function draw(dt: number, now: number) {
   }
 }
 
-function navigate(target: "lobby" | "live") {
+function navigate(target: "lobby" | "live" | "changelog", hash = "") {
   if (!leaveRoom()) return;
   role = "play";
   if (target === "live") goLive();
+  else if (target === "changelog") goChangelog(hash);
   else goLobby();
+}
+
+function openFriendRace() {
+  const details = $<HTMLDetailsElement>("friend-race");
+  details.open = true;
+  details.scrollIntoView({ block: "center" });
+  nameInput.focus({ preventScroll: true });
+}
+
+for (const link of document.querySelectorAll<HTMLAnchorElement>("[data-nav]")) {
+  link.addEventListener("click", (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    const target = link.dataset.nav;
+    if (target === "practice" || target === "daily") startMode(target);
+    else if (target === "live" || target === "changelog") navigate(target, new URL(link.href).hash);
+    else navigate("lobby");
+  });
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-start]")) {
+  button.addEventListener("click", () => {
+    const target = button.dataset.start;
+    if (target === "friends") openFriendRace();
+    else if (target === "practice" || target === "daily") startMode(target);
+  });
 }
 
 for (const tab of document.querySelectorAll<HTMLAnchorElement>(".tabs a")) {
@@ -876,7 +912,7 @@ for (const tab of document.querySelectorAll<HTMLAnchorElement>(".tabs a")) {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
     e.preventDefault();
     if (tab.dataset.action === "daily") startMode("daily");
-    else navigate(tab.dataset.view === "live" ? "live" : "lobby");
+    else navigate(tab.dataset.view === "live" || tab.dataset.view === "changelog" ? tab.dataset.view : "lobby");
   });
 }
 
@@ -993,6 +1029,7 @@ initLive(watch);
 
 const modeParam = params.get("mode");
 if (watchParam) watch(watchParam);
+else if (location.pathname === "/changelog") goChangelog(location.hash);
 else if (params.get("view") === "live") show("live");
 else if (params.get("view") === "profile") void showProfile();
 else if (isRaceMode(modeParam) && modeParam !== "multiplayer") startMode(modeParam);
