@@ -111,7 +111,7 @@ Render checks `/api/health`, which verifies the database before a deploy receive
 ```
 src/
   shared/     game.ts (speed model, typing rules, places), words.ts, progress.ts (levels, XP, cars)
-  server/     server.ts (rooms, race loop, API), db.ts, meta.ts (link previews, robots, sitemap), share.ts
+  server/     server.ts (rooms, race loop, API), db.ts, meta.ts (link previews, robots, sitemap), changelog.ts, share.ts
   client/     index.html, style.css, client.ts (screens and race flow), scene.ts (WebGL track, cars, garage),
               hud.ts, live.ts, garage.ts, leaderboard.ts, hero.ts, profile.ts, sound.ts, ui.ts
 public/og/    link preview images
@@ -134,6 +134,10 @@ neon checkout dev --create
 bun run check
 bun test
 ```
+
+## Changelog
+
+Every update is written up in [CHANGELOG.md](CHANGELOG.md), which the site also shows at `/changelog`.
 
 ## Contributing
 
