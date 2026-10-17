@@ -30,6 +30,12 @@ Open http://localhost:3000 and open the room link in a second tab to race agains
 5. Add before and after screenshots, or a short clip, for anything you can see on screen. Check it at desktop width and at 390px.
 6. Link the issue it closes (`Closes #12`).
 
+### Changelog
+
+- Every pull request that changes what players see or do adds a line to `CHANGELOG.md` under the next version, in the right group: New, Improved or Fixed.
+- Write it for players, not developers: what changed and why it matters, in one or two plain sentences.
+- A release heading is `## <version> · <YYYY-MM-DD> · <title>`. The site renders this file at `/changelog`, so keep to that format.
+
 ### Commits
 
 - Keep commits small, one logical change each.
