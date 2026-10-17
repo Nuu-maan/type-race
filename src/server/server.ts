@@ -534,7 +534,7 @@ function shell() {
 }
 
 async function asset(name: string) {
-  if (!/^[a-z0-9_-]+\.(?:css|js)$/i.test(name)) return new Response("Not found", { status: 404 });
+  if (!/^[a-z0-9_-]+\.(?:css|js|webp|png|jpg|svg)$/i.test(name)) return new Response("Not found", { status: 404 });
   const file = Bun.file(`${clientDirectory}/${name}`);
   if (!(await file.exists())) return new Response("Not found", { status: 404 });
   return new Response(file, { headers: { "cache-control": "public, max-age=31536000, immutable" } });
