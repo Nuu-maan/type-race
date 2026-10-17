@@ -10,7 +10,7 @@ export type Page = {
 const SITE = "type race";
 const CODE = /^[A-Z]{4}$/;
 
-export const OG_IMAGES = new Set(["home.jpg", "invite.jpg", "watch.jpg", "live.jpg"]);
+export const OG_IMAGES = new Set(["home.jpg", "invite.jpg", "watch.jpg", "live.jpg", "daily.jpg"]);
 
 export function pageFor(url: URL, hostOf: (code: string) => string | undefined = () => undefined): Page {
   const room = (url.searchParams.get("room") ?? "").toUpperCase();
@@ -36,6 +36,16 @@ export function pageFor(url: URL, hostOf: (code: string) => string | undefined =
       indexable: false,
     };
   }
+  if (url.searchParams.get("mode") === "daily") {
+    return {
+      title: `Today's challenge · ${SITE}`,
+      description: "One typing course a day, the same for everyone. Race it, set your score and see where you rank.",
+      image: "/og/daily.jpg",
+      imageAlt: "A car racing down a neon highway next to the words: Same words for everyone.",
+      path: "/?mode=daily",
+      indexable: true,
+    };
+  }
   if (url.searchParams.get("view") === "live") {
     return {
       title: `Live races · ${SITE}`,
@@ -57,6 +67,10 @@ export function pageFor(url: URL, hostOf: (code: string) => string | undefined =
 }
 
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+export function clientAddress(headers: Headers) {
+  return headers.get("cf-connecting-ip")?.trim() || headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || null;
+}
 
 export function originOf(req: Request) {
   const url = new URL(req.url);
@@ -114,6 +128,6 @@ export function robots(origin: string) {
 }
 
 export function sitemap(origin: string) {
-  const urls = ["/", "/?view=live"].map((path) => `  <url><loc>${escape(origin + path)}</loc></url>`);
+  const urls = ["/", "/?view=live", "/?mode=daily"].map((path) => `  <url><loc>${escape(origin + path)}</loc></url>`);
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`;
 }
