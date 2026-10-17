@@ -58,6 +58,7 @@ function run() {
     time += dt;
     distance = (distance + SPEED * dt) % LOOP;
     const lead = 150 + distance;
+    canvas.classList.add("ready");
     scene!.render(
       dt,
       [
@@ -86,4 +87,5 @@ export function stopHero() {
   resizeObserver = null;
   scene?.dispose();
   scene = null;
+  canvas.classList.remove("ready");
 }

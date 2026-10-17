@@ -6,6 +6,7 @@ const at = (query: string) => new URL(`http://localhost:3000/${query}`);
 test("each kind of link gets its own page", () => {
   expect(pageFor(at("")).image).toBe("/og/home.jpg");
   expect(pageFor(at("?view=live")).image).toBe("/og/live.jpg");
+  expect(pageFor(new URL("http://localhost:3000/changelog"))).toMatchObject({ title: "Changelog · type race", path: "/changelog", indexable: true });
   expect(pageFor(at("?mode=daily"))).toMatchObject({ image: "/og/daily.jpg", title: "Today's challenge · type race", indexable: true });
   expect(pageFor(at("?watch=abcd"))).toMatchObject({ image: "/og/watch.jpg", path: "/?watch=ABCD", indexable: false });
   expect(pageFor(at("?room=ABCD"))).toMatchObject({ image: "/og/invite.jpg", title: "Join race ABCD · type race", indexable: false });
