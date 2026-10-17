@@ -13,6 +13,7 @@ import {
   recordRace,
   setCar,
 } from "./db";
+import { parseChangelog, withChangelog, type Release } from "./changelog";
 import { clientAddress, OG_IMAGES, originOf, pageFor, robots, sitemap, withHead } from "./meta";
 import { applyBackspace, applyKey, createRace, FINISH_GRACE_MS, raceOver, results, tick, TRACK, wpm, type Race } from "../shared/game";
 import { dayKey, ghostFinishAt, isRaceMode, tracePosition, type RaceMode, type RaceTrace } from "../shared/challenge";
@@ -519,6 +520,24 @@ if (process.env.RENDER_EXTERNAL_URL) {
   setInterval(() => fetch(`${process.env.RENDER_EXTERNAL_URL}/api/live`).catch(() => {}), 10 * 60_000);
 }
 
+const changelogPath = `${import.meta.dir}/../../CHANGELOG.md`;
+let releasesCache: Promise<Release[]> | null = null;
+
+function releases() {
+  if (!releasesCache || !production) {
+    releasesCache = Bun.file(changelogPath)
+      .text()
+      .then(parseChangelog)
+      .catch(() => []);
+  }
+  return releasesCache;
+}
+
+async function page(req: Request) {
+  const html = withHead(withChangelog(await shell(), await releases()), pageFor(new URL(req.url), hostName), originOf(req));
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
 let shellHtml: Promise<string> | null = null;
 
 function shell() {
@@ -684,10 +703,8 @@ export const server = Bun.serve({
   routes: {
     "/_shell": shellRoute,
     "/assets/:name": (req) => asset(req.params.name),
-    "/": async (req) => {
-      const html = withHead(await shell(), pageFor(new URL(req.url), hostName), originOf(req));
-      return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
-    },
+    "/": page,
+    "/changelog": page,
     "/og/:name": (req) => {
       if (!OG_IMAGES.has(req.params.name)) return new Response("Not found", { status: 404 });
       return new Response(Bun.file(`${import.meta.dir}/../../public/og/${req.params.name}`), {

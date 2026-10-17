@@ -36,6 +36,16 @@ export function pageFor(url: URL, hostOf: (code: string) => string | undefined =
       indexable: false,
     };
   }
+  if (url.pathname === "/changelog") {
+    return {
+      title: `Changelog · ${SITE}`,
+      description: "Every update to type race, newest first: new modes, fixes and improvements.",
+      image: "/og/home.jpg",
+      imageAlt: "Two cars racing down a neon city highway next to the words: Type fast. Drive fast.",
+      path: "/changelog",
+      indexable: true,
+    };
+  }
   if (url.searchParams.get("mode") === "daily") {
     return {
       title: `Today's challenge · ${SITE}`,
@@ -128,6 +138,6 @@ export function robots(origin: string) {
 }
 
 export function sitemap(origin: string) {
-  const urls = ["/", "/?view=live", "/?mode=daily"].map((path) => `  <url><loc>${escape(origin + path)}</loc></url>`);
+  const urls = ["/", "/?view=live", "/?mode=daily", "/changelog"].map((path) => `  <url><loc>${escape(origin + path)}</loc></url>`);
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`;
 }
