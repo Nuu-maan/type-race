@@ -58,6 +58,10 @@ export function pageFor(url: URL, hostOf: (code: string) => string | undefined =
 
 const escape = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
+export function clientAddress(headers: Headers) {
+  return headers.get("cf-connecting-ip")?.trim() || headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || null;
+}
+
 export function originOf(req: Request) {
   const url = new URL(req.url);
   const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || url.protocol.slice(0, -1);

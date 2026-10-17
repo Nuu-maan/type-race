@@ -13,7 +13,7 @@ import {
   recordRace,
   setCar,
 } from "./db";
-import { OG_IMAGES, originOf, pageFor, robots, sitemap, withHead } from "./meta";
+import { clientAddress, OG_IMAGES, originOf, pageFor, robots, sitemap, withHead } from "./meta";
 import { applyBackspace, applyKey, createRace, FINISH_GRACE_MS, raceOver, results, tick, TRACK, wpm, type Race } from "../shared/game";
 import { dayKey, ghostFinishAt, isRaceMode, tracePosition, type RaceMode, type RaceTrace } from "../shared/challenge";
 import {
@@ -647,7 +647,7 @@ function acceptEvent(client: string, now = Date.now()) {
 
 function forwardedClient(req: Request) {
   if (process.env.RENDER !== "true") return null;
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
+  return clientAddress(req.headers);
 }
 
 async function eventResponse(req: Request, client: string) {

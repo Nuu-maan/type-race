@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { headTags, originOf, pageFor, sitemap, withHead } from "./meta";
+import { clientAddress, headTags, originOf, pageFor, sitemap, withHead } from "./meta";
 
 const at = (query: string) => new URL(`http://localhost:3000/${query}`);
 
@@ -37,4 +37,11 @@ test("origin follows the proxy's protocol and host", () => {
   const req = new Request("http://internal:10000/", { headers: { host: "type-race.onrender.com", "x-forwarded-proto": "https" } });
   expect(originOf(req)).toBe("https://type-race.onrender.com");
   expect(sitemap("https://e.com")).toContain("<loc>https://e.com/?view=live</loc>");
+});
+
+test("the visitor address comes from the proxy, not from headers the visitor can fake", () => {
+  const spoofed = new Headers({ "x-forwarded-for": "1.2.3.4, 9.9.9.9", "cf-connecting-ip": "9.9.9.9" });
+  expect(clientAddress(spoofed)).toBe("9.9.9.9");
+  expect(clientAddress(new Headers({ "x-forwarded-for": "1.2.3.4, 9.9.9.9" }))).toBe("9.9.9.9");
+  expect(clientAddress(new Headers())).toBeNull();
 });
